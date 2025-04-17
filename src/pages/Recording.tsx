@@ -3,12 +3,15 @@ import * as React from "react";
 import { useNavigate } from "react-router-dom";
 import { CountdownOverlay } from "@/components/countdown-overlay";
 import { RecordingControls } from "@/components/recording-controls";
+import { screenRecordingService } from "@/services/screen-recording";
+import { toast } from "sonner";
 
 export default function Recording() {
   const navigate = useNavigate();
   const [isCountingDown, setIsCountingDown] = React.useState(true);
   const [isPaused, setIsPaused] = React.useState(false);
   const [duration, setDuration] = React.useState(0);
+  const [stream, setStream] = React.useState<MediaStream | null>(null);
   const intervalRef = React.useRef<number | null>(null);
 
   React.useEffect(() => {
@@ -16,8 +19,11 @@ export default function Recording() {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
     };
-  }, []);
+  }, [stream]);
 
   const startTimer = () => {
     if (intervalRef.current) {
@@ -29,9 +35,30 @@ export default function Recording() {
     }, 1000);
   };
 
-  const handleCountdownComplete = () => {
-    setIsCountingDown(false);
-    startTimer();
+  const handleCountdownComplete = async () => {
+    try {
+      const displayMediaOptions = {
+        video: {
+          cursor: "always"
+        },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 44100
+        }
+      };
+
+      const mediaStream = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
+      setStream(mediaStream);
+      await screenRecordingService.startRecording(mediaStream);
+      
+      setIsCountingDown(false);
+      startTimer();
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      toast.error('Failed to start recording');
+      navigate('/');
+    }
   };
 
   const handlePauseToggle = () => {
@@ -44,12 +71,24 @@ export default function Recording() {
     }
   };
 
-  const handleStop = () => {
+  const handleStop = async () => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
     }
     
-    // In a real app, this would save the recording and navigate to the editor
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+    }
+
+    try {
+      const recordedBlob = await screenRecordingService.stopRecording();
+      await screenRecordingService.saveRecording(recordedBlob);
+      toast.success('Recording saved successfully');
+    } catch (error) {
+      console.error('Error saving recording:', error);
+      toast.error('Failed to save recording');
+    }
+    
     navigate(`/editor/new`);
   };
 
