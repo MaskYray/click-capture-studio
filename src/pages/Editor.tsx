@@ -14,12 +14,46 @@ export default function Editor() {
   const [exportProgress, setExportProgress] = React.useState(0);
   const [showExportPanel, setShowExportPanel] = React.useState(false);
   const [videoUrl, setVideoUrl] = React.useState<string | null>(null);
-  
+  const [selectedBackground, setSelectedBackground] = React.useState<number>(0);
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+
+  const backgrounds = [
+    'bg-gradient-to-br from-studio-blue/20 to-studio-purple/20',
+    'bg-gradient-to-br from-studio-purple-light to-studio-accent',
+    'bg-gradient-to-br from-studio-blue-light to-studio-purple',
+    'bg-gradient-to-r from-studio-blue to-studio-purple',
+  ];
+
   React.useEffect(() => {
     const recordedBlob = screenRecordingService.getCurrentRecording();
+    const mousePositions = screenRecordingService.getMousePositions();
+
     if (recordedBlob) {
       const url = URL.createObjectURL(recordedBlob);
       setVideoUrl(url);
+
+      if (videoRef.current) {
+        videoRef.current.ontimeupdate = () => {
+          const currentTime = videoRef.current?.currentTime || 0;
+          const relevantPositions = mousePositions.filter(
+            pos => Math.abs(pos.timestamp - (currentTime * 1000)) < 100
+          );
+
+          if (relevantPositions.length > 0) {
+            const lastPosition = relevantPositions[relevantPositions.length - 1];
+            const scale = 1.2; // Zoom scale factor
+            if (videoRef.current) {
+              videoRef.current.style.transform = `scale(${scale})`;
+              videoRef.current.style.transformOrigin = `${lastPosition.x}px ${lastPosition.y}px`;
+            }
+          } else {
+            if (videoRef.current) {
+              videoRef.current.style.transform = 'scale(1)';
+            }
+          }
+        };
+      }
+
       return () => URL.revokeObjectURL(url);
     }
   }, []);
@@ -76,14 +110,15 @@ export default function Editor() {
             </div>
           </div>
           
-          {/* Video preview */}
+          {/* Video preview with background selection */}
           <div className="relative aspect-video rounded-lg shadow-lg overflow-hidden mb-4">
-            <div className="absolute inset-0 bg-gradient-to-br from-studio-blue/20 to-studio-purple/20 backdrop-blur-sm" />
+            <div className={`absolute inset-0 ${backgrounds[selectedBackground]} backdrop-blur-sm`} />
             <div className="absolute inset-4 rounded-lg overflow-hidden bg-black/5 shadow-xl">
               {videoUrl ? (
                 <video
+                  ref={videoRef}
                   src={videoUrl}
-                  className="w-full h-full object-contain rounded-lg"
+                  className="w-full h-full object-contain rounded-lg transition-transform duration-300"
                   controls
                 />
               ) : (
@@ -92,6 +127,19 @@ export default function Editor() {
                 </div>
               )}
             </div>
+          </div>
+          
+          {/* Background selection */}
+          <div className="grid grid-cols-4 gap-4 mb-4">
+            {backgrounds.map((bg, index) => (
+              <button
+                key={index}
+                className={`aspect-video rounded-lg cursor-pointer ${bg} ${
+                  selectedBackground === index ? 'ring-2 ring-primary' : ''
+                }`}
+                onClick={() => setSelectedBackground(index)}
+              />
+            ))}
           </div>
           
           {/* Timeline editor */}

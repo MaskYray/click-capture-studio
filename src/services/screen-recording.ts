@@ -4,24 +4,58 @@ export interface RecordingOptions {
   video: boolean;
 }
 
+export interface MousePosition {
+  x: number;
+  y: number;
+  timestamp: number;
+}
+
 export class ScreenRecordingService {
   private mediaRecorder: MediaRecorder | null = null;
   private recordedChunks: Blob[] = [];
   private currentRecording: Blob | null = null;
+  private mousePositions: MousePosition[] = [];
+  private trackingInterval: number | null = null;
 
   getCurrentRecording() {
     return this.currentRecording;
   }
 
+  getMousePositions() {
+    return this.mousePositions;
+  }
+
+  private trackMousePosition = () => {
+    const handleMouseMove = (e: MouseEvent) => {
+      this.mousePositions.push({
+        x: e.clientX,
+        y: e.clientY,
+        timestamp: Date.now()
+      });
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+    };
+  }
+
   async startRecording(stream: MediaStream) {
     try {
       this.recordedChunks = [];
+      this.mousePositions = [];
       this.mediaRecorder = new MediaRecorder(stream);
 
       this.mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           this.recordedChunks.push(event.data);
         }
+      };
+
+      const cleanup = this.trackMousePosition();
+      this.mediaRecorder.onstop = () => {
+        cleanup();
       };
 
       this.mediaRecorder.start();

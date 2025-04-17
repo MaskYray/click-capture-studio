@@ -1,3 +1,4 @@
+
 import * as React from "react";
 import { useNavigate } from "react-router-dom";
 import { CountdownOverlay } from "@/components/countdown-overlay";
@@ -36,9 +37,11 @@ export default function Recording() {
 
   const handleCountdownComplete = async () => {
     try {
-      const displayMediaOptions: DisplayMediaStreamOptions = {
+      const displayMediaOptions = {
         video: {
-          cursor: "always" as DisplayCaptureSurfaceType,
+          displaySurface: "monitor" as DisplayCaptureSurfaceType,
+          logicalSurface: true,
+          frameRate: 60,
         },
         audio: {
           echoCancellation: true,
