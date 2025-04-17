@@ -1,4 +1,3 @@
-
 import * as React from "react";
 import { useParams } from "react-router-dom";
 import { ChevronLeft, Download, Play, Save, ZoomIn } from "lucide-react";
@@ -6,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { MainNav } from "@/components/main-nav";
 import { TimelineEditor } from "@/components/timeline-editor";
 import { ExportPanel } from "@/components/export-panel";
+import { screenRecordingService } from "@/services/screen-recording";
 
 export default function Editor() {
   const { id } = useParams<{ id: string }>();
@@ -13,31 +13,29 @@ export default function Editor() {
   const [isExporting, setIsExporting] = React.useState(false);
   const [exportProgress, setExportProgress] = React.useState(0);
   const [showExportPanel, setShowExportPanel] = React.useState(false);
+  const [videoUrl, setVideoUrl] = React.useState<string | null>(null);
   
+  React.useEffect(() => {
+    const recordedBlob = screenRecordingService.getCurrentRecording();
+    if (recordedBlob) {
+      const url = URL.createObjectURL(recordedBlob);
+      setVideoUrl(url);
+      return () => URL.revokeObjectURL(url);
+    }
+  }, []);
+
   // Mock project title
   const projectTitle = id === "new" ? "Untitled Project" : "Project Demo";
   
   // Mock video duration (in seconds)
   const videoDuration = 45;
 
-  const handleExport = (format: string, quality: string, ratio: string) => {
-    setIsExporting(true);
-    let progress = 0;
-    
-    // Simulate export progress
-    const interval = setInterval(() => {
-      progress += Math.random() * 5;
-      if (progress >= 100) {
-        progress = 100;
-        clearInterval(interval);
-        setTimeout(() => {
-          setIsExporting(false);
-          setExportProgress(0);
-          setShowExportPanel(false);
-        }, 1000);
-      }
-      setExportProgress(Math.floor(progress));
-    }, 500);
+  const handleExport = async (format: string, quality: string, ratio: string) => {
+    const recordedBlob = screenRecordingService.getCurrentRecording();
+    if (recordedBlob) {
+      await screenRecordingService.saveRecording(recordedBlob);
+    }
+    setShowExportPanel(false);
   };
 
   return (
@@ -79,15 +77,20 @@ export default function Editor() {
           </div>
           
           {/* Video preview */}
-          <div className="relative bg-black aspect-video rounded-lg shadow-sm overflow-hidden mb-4">
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Play className="h-16 w-16 text-white/50" />
-            </div>
-            
-            <div className="absolute bottom-4 right-4 flex space-x-2">
-              <Button size="sm" variant="ghost" className="bg-black/50 text-white hover:bg-black/70">
-                <ZoomIn className="h-4 w-4" />
-              </Button>
+          <div className="relative aspect-video rounded-lg shadow-lg overflow-hidden mb-4">
+            <div className="absolute inset-0 bg-gradient-to-br from-studio-blue/20 to-studio-purple/20 backdrop-blur-sm" />
+            <div className="absolute inset-4 rounded-lg overflow-hidden bg-black/5 shadow-xl">
+              {videoUrl ? (
+                <video
+                  src={videoUrl}
+                  className="w-full h-full object-contain rounded-lg"
+                  controls
+                />
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  <Play className="h-16 w-16 text-white/50" />
+                </div>
+              )}
             </div>
           </div>
           

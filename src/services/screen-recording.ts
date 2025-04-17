@@ -7,6 +7,11 @@ export interface RecordingOptions {
 export class ScreenRecordingService {
   private mediaRecorder: MediaRecorder | null = null;
   private recordedChunks: Blob[] = [];
+  private currentRecording: Blob | null = null;
+
+  getCurrentRecording() {
+    return this.currentRecording;
+  }
 
   async startRecording(stream: MediaStream) {
     try {
@@ -36,6 +41,7 @@ export class ScreenRecordingService {
       this.mediaRecorder.onstop = () => {
         const recordedBlob = new Blob(this.recordedChunks, { type: 'video/webm' });
         this.recordedChunks = [];
+        this.currentRecording = recordedBlob;
         resolve(recordedBlob);
       };
 

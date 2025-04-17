@@ -1,4 +1,3 @@
-
 import * as React from "react";
 import { useNavigate } from "react-router-dom";
 import { CountdownOverlay } from "@/components/countdown-overlay";
@@ -37,10 +36,8 @@ export default function Recording() {
 
   const handleCountdownComplete = async () => {
     try {
-      // Fix: Correctly structure the DisplayMediaStreamOptions
       const displayMediaOptions: DisplayMediaStreamOptions = {
         video: {
-          // Correctly include cursor as part of MediaTrackConstraints
           cursor: "always" as DisplayCaptureSurfaceType,
         },
         audio: {
@@ -83,9 +80,8 @@ export default function Recording() {
     }
 
     try {
-      const recordedBlob = await screenRecordingService.stopRecording();
-      await screenRecordingService.saveRecording(recordedBlob);
-      toast.success('Recording saved successfully');
+      await screenRecordingService.stopRecording();
+      toast.success('Recording completed');
     } catch (error) {
       console.error('Error saving recording:', error);
       toast.error('Failed to save recording');
