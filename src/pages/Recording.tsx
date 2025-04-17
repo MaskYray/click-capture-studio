@@ -37,9 +37,11 @@ export default function Recording() {
 
   const handleCountdownComplete = async () => {
     try {
-      const displayMediaOptions = {
+      // Fix: Correctly structure the DisplayMediaStreamOptions
+      const displayMediaOptions: DisplayMediaStreamOptions = {
         video: {
-          cursor: "always"
+          // Correctly include cursor as part of MediaTrackConstraints
+          cursor: "always" as DisplayCaptureSurfaceType,
         },
         audio: {
           echoCancellation: true,
