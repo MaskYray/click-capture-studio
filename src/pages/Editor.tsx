@@ -1,14 +1,21 @@
 import * as React from "react";
 import { useParams } from "react-router-dom";
-import { ChevronLeft, Download, Play, Save, ZoomIn } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { MainNav } from "@/components/main-nav";
 import { TimelineEditor } from "@/components/timeline-editor";
 import { ExportPanel } from "@/components/export-panel";
 import { screenRecordingService } from "@/services/screen-recording";
 import { Slider } from "@/components/ui/slider";
-import { toast } from "sonner";
-import html2canvas from "html2canvas";
+import { VideoPreview } from "@/components/video-preview/VideoPreview";
+import { BackgroundSelector } from "@/components/video-preview/BackgroundSelector";
+import { EditorHeader } from "@/components/editor/EditorHeader";
+import { exportVideo } from "@/utils/videoExport";
+
+const backgrounds = [
+  'bg-gradient-to-br from-studio-blue/20 to-studio-purple/20',
+  'bg-gradient-to-br from-studio-purple-light to-studio-accent',
+  'bg-gradient-to-br from-studio-blue-light to-studio-purple',
+  'bg-gradient-to-r from-studio-blue to-studio-purple',
+];
 
 export default function Editor() {
   const { id } = useParams<{ id: string }>();
@@ -20,13 +27,6 @@ export default function Editor() {
   const [selectedBackground, setSelectedBackground] = React.useState<number>(0);
   const [padding, setPadding] = React.useState(16);
   const videoRef = React.useRef<HTMLVideoElement>(null);
-
-  const backgrounds = [
-    'bg-gradient-to-br from-studio-blue/20 to-studio-purple/20',
-    'bg-gradient-to-br from-studio-purple-light to-studio-accent',
-    'bg-gradient-to-br from-studio-blue-light to-studio-purple',
-    'bg-gradient-to-r from-studio-blue to-studio-purple',
-  ];
 
   React.useEffect(() => {
     const recordedBlob = screenRecordingService.getCurrentRecording();
@@ -63,113 +63,26 @@ export default function Editor() {
   }, []);
 
   const projectTitle = id === "new" ? "Untitled Project" : "Project Demo";
-  
   const videoDuration = 45;
 
   const handleExport = async (format: string, quality: string, ratio: string) => {
     try {
-      if (!videoRef.current || !videoUrl) {
-        toast.error("No video available to export");
-        return;
-      }
-
       setIsExporting(true);
-      setExportProgress(0);
-
       const videoContainer = document.getElementById('video-container');
-      if (!videoContainer) {
-        toast.error("Could not find video container");
-        setIsExporting(false);
-        return;
-      }
-
-      const wasPlaying = !videoRef.current.paused;
-      if (wasPlaying) videoRef.current.pause();
       
-      videoRef.current.currentTime = 0;
-
-      const canvas = document.createElement('canvas');
-      canvas.width = videoContainer.offsetWidth;
-      canvas.height = videoContainer.offsetHeight;
-      const ctx = canvas.getContext('2d');
+      if (!videoRef.current || !videoContainer) return;
       
-      if (!ctx) {
-        toast.error("Failed to create canvas context");
-        setIsExporting(false);
-        return;
-      }
-
-      const bitrate = quality === '2160p' ? 8000000 : quality === '1080p' ? 5000000 : 2000000;
-      const stream = canvas.captureStream(30); // 30fps
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: format === 'webm' ? 'video/webm' : 'video/mp4',
-        videoBitsPerSecond: bitrate
-      });
+      await exportVideo(
+        videoRef.current,
+        videoContainer,
+        format,
+        quality,
+        setExportProgress
+      );
       
-      const chunks: BlobPart[] = [];
-      
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunks.push(e.data);
-        }
-      };
-
-      mediaRecorder.onstop = async () => {
-        const blob = new Blob(chunks, { 
-          type: format === 'webm' ? 'video/webm' : 'video/mp4' 
-        });
-        
-        setExportProgress(100);
-        const fileName = `screen-recording.${format}`;
-        await screenRecordingService.saveRecording(blob, fileName);
-        toast.success(`Export completed successfully: ${fileName}`);
-        setIsExporting(false);
-        setShowExportPanel(false);
-      };
-
-      mediaRecorder.start();
-      setExportProgress(10);
-      videoRef.current.muted = false;
-      videoRef.current.play();
-
-      let lastProgress = 10;
-      const totalDuration = videoRef.current.duration;
-      const progressInterval = setInterval(() => {
-        if (videoRef.current) {
-          const currentProgress = 10 + (videoRef.current.currentTime / totalDuration) * 85;
-          lastProgress = Math.min(95, currentProgress);
-          setExportProgress(Math.floor(lastProgress));
-        }
-      }, 500);
-
-      const captureFrame = async () => {
-        const snapshot = await html2canvas(videoContainer, {
-          backgroundColor: null,
-          logging: false,
-          useCORS: true,
-          allowTaint: true,
-          scale: quality === '2160p' ? 2 : 1
-        });
-        
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(snapshot, 0, 0, canvas.width, canvas.height);
-        
-        if (!videoRef.current.ended && !videoRef.current.paused) {
-          requestAnimationFrame(captureFrame);
-        } else {
-          clearInterval(progressInterval);
-          setTimeout(() => {
-            mediaRecorder.stop();
-            if (wasPlaying) videoRef.current?.play();
-          }, 500);
-        }
-      };
-
-      captureFrame();
-      
+      setIsExporting(false);
+      setShowExportPanel(false);
     } catch (error) {
-      console.error('Export failed:', error);
-      toast.error('Failed to export video');
       setIsExporting(false);
       setExportProgress(0);
       setShowExportPanel(false);
@@ -182,72 +95,23 @@ export default function Editor() {
       
       <main className="flex-1 px-6 py-4 flex flex-col">
         <div className="max-w-7xl w-full mx-auto flex-1 flex flex-col">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center">
-              <Button variant="ghost" className="mr-2">
-                <a href="/">
-                  <ChevronLeft className="h-4 w-4 mr-1" />
-                  Back
-                </a>
-              </Button>
-              <h1 className="text-2xl font-semibold">{projectTitle}</h1>
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <Button variant="outline" size="sm">
-                <Save className="h-4 w-4 mr-2" />
-                Save
-              </Button>
-              <Button variant="outline" size="sm">
-                <Play className="h-4 w-4 mr-2" />
-                Preview
-              </Button>
-              <Button 
-                className="bg-studio-blue hover:bg-studio-blue/90"
-                size="sm"
-                onClick={() => setShowExportPanel(!showExportPanel)}
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Export
-              </Button>
-            </div>
-          </div>
+          <EditorHeader 
+            projectTitle={projectTitle}
+            onExportClick={() => setShowExportPanel(!showExportPanel)}
+          />
           
-          <div className="relative aspect-video rounded-lg shadow-lg overflow-hidden mb-4">
-            <div id="video-container" className={`absolute inset-0 ${backgrounds[selectedBackground]} backdrop-blur-sm`}>
-              <div 
-                className="absolute rounded-lg overflow-hidden bg-black/5 shadow-xl transition-all duration-300"
-                style={{ 
-                  inset: `${padding}px`,
-                }}
-              >
-                {videoUrl ? (
-                  <video
-                    ref={videoRef}
-                    src={videoUrl}
-                    className="w-full h-full object-contain rounded-lg transition-transform duration-300"
-                    controls
-                  />
-                ) : (
-                  <div className="flex items-center justify-center h-full">
-                    <Play className="h-16 w-16 text-white/50" />
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+          <VideoPreview
+            videoUrl={videoUrl}
+            videoRef={videoRef}
+            background={backgrounds[selectedBackground]}
+            padding={padding}
+          />
           
-          <div className="grid grid-cols-4 gap-4 mb-4">
-            {backgrounds.map((bg, index) => (
-              <button
-                key={index}
-                className={`aspect-video rounded-lg cursor-pointer ${bg} ${
-                  selectedBackground === index ? 'ring-2 ring-primary' : ''
-                }`}
-                onClick={() => setSelectedBackground(index)}
-              />
-            ))}
-          </div>
+          <BackgroundSelector
+            backgrounds={backgrounds}
+            selectedBackground={selectedBackground}
+            onBackgroundSelect={setSelectedBackground}
+          />
           
           <TimelineEditor
             duration={videoDuration}
