@@ -7,6 +7,7 @@ import { TimelineEditor } from "@/components/timeline-editor";
 import { ExportPanel } from "@/components/export-panel";
 import { screenRecordingService } from "@/services/screen-recording";
 import { Slider } from "@/components/ui/slider";
+import { toast } from "sonner";
 
 export default function Editor() {
   const { id } = useParams<{ id: string }>();
@@ -67,22 +68,45 @@ export default function Editor() {
   const handleExport = async (format: string, quality: string, ratio: string) => {
     try {
       const videoContainer = document.getElementById('video-container');
-      if (!videoContainer) return;
+      if (!videoContainer) {
+        toast.error("Could not find video container");
+        return;
+      }
+
+      setIsExporting(true);
+      setExportProgress(0);
 
       const html2canvas = (await import('html2canvas')).default;
-      const canvas = await html2canvas(videoContainer);
       
+      const canvas = await html2canvas(videoContainer, {
+        backgroundColor: null,
+        scale: quality === '2160p' ? 2 : 1,
+        logging: false,
+        allowTaint: true,
+        useCORS: true
+      });
+
       const blob = await new Promise<Blob>((resolve) => {
         canvas.toBlob((blob) => {
           if (blob) resolve(blob);
-        }, 'image/png');
+        }, `image/${format === 'gif' ? 'gif' : 'png'}`);
       });
 
-      await screenRecordingService.saveRecording(blob);
+      if (!blob) {
+        throw new Error('Failed to create image blob');
+      }
+
+      setExportProgress(100);
+      await screenRecordingService.saveRecording(blob, `capture.${format === 'gif' ? 'gif' : 'png'}`);
+      toast.success('Export completed successfully');
     } catch (error) {
       console.error('Export failed:', error);
+      toast.error('Failed to export video');
+    } finally {
+      setIsExporting(false);
+      setExportProgress(0);
+      setShowExportPanel(false);
     }
-    setShowExportPanel(false);
   };
 
   return (
