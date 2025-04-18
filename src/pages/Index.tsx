@@ -1,6 +1,4 @@
-
 import * as React from "react";
-import { Link } from "react-router-dom";
 import { Camera, File, Plus, UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -117,8 +115,8 @@ export default function Index() {
           <div className="animate-slide-up">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-semibold">Recent Projects</h2>
-              <Button variant="ghost" asChild>
-                <Link to="/projects">View all projects</Link>
+              <Button variant="ghost">
+                <a href="/projects">View all projects</a>
               </Button>
             </div>
 

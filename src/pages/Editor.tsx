@@ -93,7 +93,7 @@ export default function Editor() {
         <div className="max-w-7xl w-full mx-auto flex-1 flex flex-col">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center">
-              <Button variant="ghost" className="mr-2" asChild>
+              <Button variant="ghost" className="mr-2">
                 <a href="/">
                   <ChevronLeft className="h-4 w-4 mr-1" />
                   Back
