@@ -1,4 +1,3 @@
-
 import * as React from "react";
 import { useParams } from "react-router-dom";
 import { ChevronLeft, Download, Play, Save, ZoomIn } from "lucide-react";
@@ -9,6 +8,7 @@ import { ExportPanel } from "@/components/export-panel";
 import { screenRecordingService } from "@/services/screen-recording";
 import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
+import html2canvas from "html2canvas";
 
 export default function Editor() {
   const { id } = useParams<{ id: string }>();
@@ -76,123 +76,96 @@ export default function Editor() {
       setIsExporting(true);
       setExportProgress(0);
 
-      // Clone the original video for processing
-      const originalVideo = videoRef.current;
       const videoContainer = document.getElementById('video-container');
-
       if (!videoContainer) {
         toast.error("Could not find video container");
         setIsExporting(false);
         return;
       }
 
-      // Create a canvas to capture the background and video
+      const wasPlaying = !videoRef.current.paused;
+      if (wasPlaying) videoRef.current.pause();
+      
+      videoRef.current.currentTime = 0;
+
       const canvas = document.createElement('canvas');
+      canvas.width = videoContainer.offsetWidth;
+      canvas.height = videoContainer.offsetHeight;
       const ctx = canvas.getContext('2d');
       
       if (!ctx) {
-        toast.error("Could not create canvas context");
+        toast.error("Failed to create canvas context");
         setIsExporting(false);
         return;
       }
 
-      // Get styles from the container
-      const containerStyles = window.getComputedStyle(videoContainer);
-      const containerWidth = videoContainer.clientWidth;
-      const containerHeight = videoContainer.clientHeight;
-      
-      // Match canvas size to container
-      canvas.width = containerWidth;
-      canvas.height = containerHeight;
-
-      // Set up a media recorder to capture frames
-      const stream = canvas.captureStream(30); // 30 FPS
+      const bitrate = quality === '2160p' ? 8000000 : quality === '1080p' ? 5000000 : 2000000;
+      const stream = canvas.captureStream(30); // 30fps
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: format === 'webm' ? 'video/webm' : 'video/mp4',
-        videoBitsPerSecond: quality === '2160p' ? 8000000 : 5000000
+        videoBitsPerSecond: bitrate
       });
       
       const chunks: BlobPart[] = [];
       
-      mediaRecorder.ondataavailable = function(e) {
+      mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
           chunks.push(e.data);
         }
       };
-      
-      mediaRecorder.onstop = async function() {
+
+      mediaRecorder.onstop = async () => {
         const blob = new Blob(chunks, { 
           type: format === 'webm' ? 'video/webm' : 'video/mp4' 
         });
         
         setExportProgress(100);
-        await screenRecordingService.saveRecording(blob, `capture.${format}`);
-        toast.success('Export completed successfully');
+        const fileName = `screen-recording.${format}`;
+        await screenRecordingService.saveRecording(blob, fileName);
+        toast.success(`Export completed successfully: ${fileName}`);
         setIsExporting(false);
         setShowExportPanel(false);
       };
 
-      // Start recording
       mediaRecorder.start();
       setExportProgress(10);
+      videoRef.current.muted = false;
+      videoRef.current.play();
 
-      // Reset the original video and prepare for frame capture
-      originalVideo.currentTime = 0;
-      originalVideo.muted = false;
-      originalVideo.play();
+      let lastProgress = 10;
+      const totalDuration = videoRef.current.duration;
+      const progressInterval = setInterval(() => {
+        if (videoRef.current) {
+          const currentProgress = 10 + (videoRef.current.currentTime / totalDuration) * 85;
+          lastProgress = Math.min(95, currentProgress);
+          setExportProgress(Math.floor(lastProgress));
+        }
+      }, 500);
 
-      // Track progress
-      let lastTime = 0;
-      const totalDuration = originalVideo.duration;
-      
-      // Function to draw each frame with background
-      const drawFrame = () => {
-        // Clear canvas
+      const captureFrame = async () => {
+        const snapshot = await html2canvas(videoContainer, {
+          backgroundColor: null,
+          logging: false,
+          useCORS: true,
+          allowTaint: true,
+          scale: quality === '2160p' ? 2 : 1
+        });
+        
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(snapshot, 0, 0, canvas.width, canvas.height);
         
-        // Draw background based on selected background
-        const bgElement = videoContainer.querySelector('div');
-        if (bgElement) {
-          // Capture background color/gradient
-          const bgStyles = window.getComputedStyle(bgElement);
-          ctx.fillStyle = bgStyles.background;
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-        }
-        
-        // Draw video frame with padding
-        const videoBounds = originalVideo.getBoundingClientRect();
-        const paddingRatio = padding / containerWidth;
-        const innerWidth = containerWidth * (1 - 2 * paddingRatio);
-        const innerHeight = containerHeight * (1 - 2 * paddingRatio);
-        const paddingX = containerWidth * paddingRatio;
-        const paddingY = containerHeight * paddingRatio;
-        
-        ctx.drawImage(
-          originalVideo, 
-          paddingX, paddingY, 
-          innerWidth, innerHeight
-        );
-        
-        // Update progress based on video time
-        if (originalVideo.currentTime > lastTime) {
-          lastTime = originalVideo.currentTime;
-          const progress = Math.min(90, 10 + (lastTime / totalDuration) * 80);
-          setExportProgress(Math.floor(progress));
-        }
-        
-        // Continue drawing frames until video ends
-        if (!originalVideo.ended && !originalVideo.paused) {
-          requestAnimationFrame(drawFrame);
+        if (!videoRef.current.ended && !videoRef.current.paused) {
+          requestAnimationFrame(captureFrame);
         } else {
-          // Finish recording when video ends
+          clearInterval(progressInterval);
           setTimeout(() => {
             mediaRecorder.stop();
+            if (wasPlaying) videoRef.current?.play();
           }, 500);
         }
       };
-      
-      // Start the drawing process
-      drawFrame();
+
+      captureFrame();
       
     } catch (error) {
       console.error('Export failed:', error);
