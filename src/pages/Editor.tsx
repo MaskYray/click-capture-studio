@@ -1,3 +1,4 @@
+
 import * as React from "react";
 import { useParams } from "react-router-dom";
 import { ChevronLeft, Download, Play, Save, ZoomIn } from "lucide-react";
@@ -67,42 +68,135 @@ export default function Editor() {
 
   const handleExport = async (format: string, quality: string, ratio: string) => {
     try {
-      const videoContainer = document.getElementById('video-container');
-      if (!videoContainer) {
-        toast.error("Could not find video container");
+      if (!videoRef.current || !videoUrl) {
+        toast.error("No video available to export");
         return;
       }
 
       setIsExporting(true);
       setExportProgress(0);
 
-      const html2canvas = (await import('html2canvas')).default;
-      
-      const canvas = await html2canvas(videoContainer, {
-        backgroundColor: null,
-        scale: quality === '2160p' ? 2 : 1,
-        logging: false,
-        allowTaint: true,
-        useCORS: true
-      });
+      // Clone the original video for processing
+      const originalVideo = videoRef.current;
+      const videoContainer = document.getElementById('video-container');
 
-      const blob = await new Promise<Blob>((resolve) => {
-        canvas.toBlob((blob) => {
-          if (blob) resolve(blob);
-        }, `image/${format === 'gif' ? 'gif' : 'png'}`);
-      });
-
-      if (!blob) {
-        throw new Error('Failed to create image blob');
+      if (!videoContainer) {
+        toast.error("Could not find video container");
+        setIsExporting(false);
+        return;
       }
 
-      setExportProgress(100);
-      await screenRecordingService.saveRecording(blob, `capture.${format === 'gif' ? 'gif' : 'png'}`);
-      toast.success('Export completed successfully');
+      // Create a canvas to capture the background and video
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      if (!ctx) {
+        toast.error("Could not create canvas context");
+        setIsExporting(false);
+        return;
+      }
+
+      // Get styles from the container
+      const containerStyles = window.getComputedStyle(videoContainer);
+      const containerWidth = videoContainer.clientWidth;
+      const containerHeight = videoContainer.clientHeight;
+      
+      // Match canvas size to container
+      canvas.width = containerWidth;
+      canvas.height = containerHeight;
+
+      // Set up a media recorder to capture frames
+      const stream = canvas.captureStream(30); // 30 FPS
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: format === 'webm' ? 'video/webm' : 'video/mp4',
+        videoBitsPerSecond: quality === '2160p' ? 8000000 : 5000000
+      });
+      
+      const chunks: BlobPart[] = [];
+      
+      mediaRecorder.ondataavailable = function(e) {
+        if (e.data.size > 0) {
+          chunks.push(e.data);
+        }
+      };
+      
+      mediaRecorder.onstop = async function() {
+        const blob = new Blob(chunks, { 
+          type: format === 'webm' ? 'video/webm' : 'video/mp4' 
+        });
+        
+        setExportProgress(100);
+        await screenRecordingService.saveRecording(blob, `capture.${format}`);
+        toast.success('Export completed successfully');
+        setIsExporting(false);
+        setShowExportPanel(false);
+      };
+
+      // Start recording
+      mediaRecorder.start();
+      setExportProgress(10);
+
+      // Reset the original video and prepare for frame capture
+      originalVideo.currentTime = 0;
+      originalVideo.muted = false;
+      originalVideo.play();
+
+      // Track progress
+      let lastTime = 0;
+      const totalDuration = originalVideo.duration;
+      
+      // Function to draw each frame with background
+      const drawFrame = () => {
+        // Clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw background based on selected background
+        const bgElement = videoContainer.querySelector('div');
+        if (bgElement) {
+          // Capture background color/gradient
+          const bgStyles = window.getComputedStyle(bgElement);
+          ctx.fillStyle = bgStyles.background;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        
+        // Draw video frame with padding
+        const videoBounds = originalVideo.getBoundingClientRect();
+        const paddingRatio = padding / containerWidth;
+        const innerWidth = containerWidth * (1 - 2 * paddingRatio);
+        const innerHeight = containerHeight * (1 - 2 * paddingRatio);
+        const paddingX = containerWidth * paddingRatio;
+        const paddingY = containerHeight * paddingRatio;
+        
+        ctx.drawImage(
+          originalVideo, 
+          paddingX, paddingY, 
+          innerWidth, innerHeight
+        );
+        
+        // Update progress based on video time
+        if (originalVideo.currentTime > lastTime) {
+          lastTime = originalVideo.currentTime;
+          const progress = Math.min(90, 10 + (lastTime / totalDuration) * 80);
+          setExportProgress(Math.floor(progress));
+        }
+        
+        // Continue drawing frames until video ends
+        if (!originalVideo.ended && !originalVideo.paused) {
+          requestAnimationFrame(drawFrame);
+        } else {
+          // Finish recording when video ends
+          setTimeout(() => {
+            mediaRecorder.stop();
+          }, 500);
+        }
+      };
+      
+      // Start the drawing process
+      drawFrame();
+      
     } catch (error) {
       console.error('Export failed:', error);
       toast.error('Failed to export video');
-    } finally {
       setIsExporting(false);
       setExportProgress(0);
       setShowExportPanel(false);
