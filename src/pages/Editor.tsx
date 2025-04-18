@@ -6,6 +6,7 @@ import { MainNav } from "@/components/main-nav";
 import { TimelineEditor } from "@/components/timeline-editor";
 import { ExportPanel } from "@/components/export-panel";
 import { screenRecordingService } from "@/services/screen-recording";
+import { Slider } from "@/components/ui/slider";
 
 export default function Editor() {
   const { id } = useParams<{ id: string }>();
@@ -15,6 +16,7 @@ export default function Editor() {
   const [showExportPanel, setShowExportPanel] = React.useState(false);
   const [videoUrl, setVideoUrl] = React.useState<string | null>(null);
   const [selectedBackground, setSelectedBackground] = React.useState<number>(0);
+  const [padding, setPadding] = React.useState(16);
   const videoRef = React.useRef<HTMLVideoElement>(null);
 
   const backgrounds = [
@@ -58,16 +60,27 @@ export default function Editor() {
     }
   }, []);
 
-  // Mock project title
   const projectTitle = id === "new" ? "Untitled Project" : "Project Demo";
   
-  // Mock video duration (in seconds)
   const videoDuration = 45;
 
   const handleExport = async (format: string, quality: string, ratio: string) => {
-    const recordedBlob = screenRecordingService.getCurrentRecording();
-    if (recordedBlob) {
-      await screenRecordingService.saveRecording(recordedBlob);
+    try {
+      const videoContainer = document.getElementById('video-container');
+      if (!videoContainer) return;
+
+      const html2canvas = (await import('html2canvas')).default;
+      const canvas = await html2canvas(videoContainer);
+      
+      const blob = await new Promise<Blob>((resolve) => {
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob);
+        }, 'image/png');
+      });
+
+      await screenRecordingService.saveRecording(blob);
+    } catch (error) {
+      console.error('Export failed:', error);
     }
     setShowExportPanel(false);
   };
@@ -78,7 +91,6 @@ export default function Editor() {
       
       <main className="flex-1 px-6 py-4 flex flex-col">
         <div className="max-w-7xl w-full mx-auto flex-1 flex flex-col">
-          {/* Editor header */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center">
               <Button variant="ghost" className="mr-2" asChild>
@@ -110,26 +122,30 @@ export default function Editor() {
             </div>
           </div>
           
-          {/* Video preview with background selection */}
           <div className="relative aspect-video rounded-lg shadow-lg overflow-hidden mb-4">
-            <div className={`absolute inset-0 ${backgrounds[selectedBackground]} backdrop-blur-sm`} />
-            <div className="absolute inset-4 rounded-lg overflow-hidden bg-black/5 shadow-xl">
-              {videoUrl ? (
-                <video
-                  ref={videoRef}
-                  src={videoUrl}
-                  className="w-full h-full object-contain rounded-lg transition-transform duration-300"
-                  controls
-                />
-              ) : (
-                <div className="flex items-center justify-center h-full">
-                  <Play className="h-16 w-16 text-white/50" />
-                </div>
-              )}
+            <div id="video-container" className={`absolute inset-0 ${backgrounds[selectedBackground]} backdrop-blur-sm`}>
+              <div 
+                className="absolute rounded-lg overflow-hidden bg-black/5 shadow-xl transition-all duration-300"
+                style={{ 
+                  inset: `${padding}px`,
+                }}
+              >
+                {videoUrl ? (
+                  <video
+                    ref={videoRef}
+                    src={videoUrl}
+                    className="w-full h-full object-contain rounded-lg transition-transform duration-300"
+                    controls
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-full">
+                    <Play className="h-16 w-16 text-white/50" />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
           
-          {/* Background selection */}
           <div className="grid grid-cols-4 gap-4 mb-4">
             {backgrounds.map((bg, index) => (
               <button
@@ -142,14 +158,26 @@ export default function Editor() {
             ))}
           </div>
           
-          {/* Timeline editor */}
           <TimelineEditor
             duration={videoDuration}
             currentTime={currentTime}
             onTimeChange={setCurrentTime}
           />
           
-          {/* Export panel */}
+          <div className="mb-4 space-y-2">
+            <div className="flex justify-between text-sm">
+              <span>Video Padding</span>
+              <span>{padding}px</span>
+            </div>
+            <Slider
+              value={[padding]}
+              min={0}
+              max={64}
+              step={4}
+              onValueChange={([value]) => setPadding(value)}
+            />
+          </div>
+          
           {showExportPanel && (
             <div className="mt-4">
               <ExportPanel
