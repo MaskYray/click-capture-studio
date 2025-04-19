@@ -159,7 +159,7 @@ export default function Editor() {
                   setProjectTitle(e.target.value)
                   timeOut = setTimeout(() => {
                     setShowInput(false)
-                  }, 1000)
+                  }, 4000)
                 }} />
               }
             </div>
