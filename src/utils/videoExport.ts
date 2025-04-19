@@ -38,12 +38,18 @@ export const exportVideo = async (
     // Calculate high resolution canvas dimensions based on quality setting
     const scaleFactor = quality === '2160p' ? 4 : quality === '1080p' ? 2.5 : 2;
     const canvas = document.createElement('canvas');
-    canvas.width = videoContainer.offsetWidth * scaleFactor;
-    canvas.height = videoContainer.offsetHeight * scaleFactor;
+    const videoWidth = videoRef.videoWidth || videoContainer.clientWidth;
+    const videoHeight = videoRef.videoHeight || videoContainer.clientHeight;
+    
+    // Ensure dimensions are even (required by some codecs)
+    canvas.width = Math.floor(videoWidth * scaleFactor / 2) * 2;
+    canvas.height = Math.floor(videoHeight * scaleFactor / 2) * 2;
+    
     const ctx = canvas.getContext('2d', { alpha: false });
     
     if (!ctx) {
       toast.error("Failed to create canvas context");
+      if (wasPlaying) videoRef.play();
       return;
     }
 
@@ -51,28 +57,60 @@ export const exportVideo = async (
     const bitrate = quality === '2160p' ? 30000000 : quality === '1080p' ? 15000000 : 8000000;
     
     // Use higher framerate for smoother video
-    const fps = 60;
+    const fps = 30;
     const stream = canvas.captureStream(fps);
     
-    // Force specific codec and container type
-    let mimeType = 'video/webm;codecs=vp9';
+    // Force appropriate codec based on format
+    let mimeType;
+    let codecs;
     if (format === 'mp4') {
-      mimeType = 'video/mp4;codecs=h264';
+      // Try different codecs for MP4
+      const possibleMimeTypes = [
+        'video/mp4;codecs=h264',
+        'video/mp4;codecs=avc1.42E01E',
+        'video/mp4'
+      ];
+      
+      for (const type of possibleMimeTypes) {
+        if (MediaRecorder.isTypeSupported(type)) {
+          mimeType = type;
+          break;
+        }
+      }
+    } else if (format === 'webm') {
+      // Try different codecs for WebM
+      const possibleMimeTypes = [
+        'video/webm;codecs=vp9',
+        'video/webm;codecs=vp8',
+        'video/webm'
+      ];
+      
+      for (const type of possibleMimeTypes) {
+        if (MediaRecorder.isTypeSupported(type)) {
+          mimeType = type;
+          break;
+        }
+      }
     }
     
-    // Configure MediaRecorder with highest quality settings
+    // Configure MediaRecorder with the best available codec
     let mediaRecorder;
     try {
-      mediaRecorder = new MediaRecorder(stream, {
-        mimeType: mimeType,
+      const options: MediaRecorderOptions = {
         videoBitsPerSecond: bitrate
-      });
+      };
+      
+      if (mimeType) {
+        options.mimeType = mimeType;
+      }
+      
+      mediaRecorder = new MediaRecorder(stream, options);
+      console.log(`Using codec: ${mediaRecorder.mimeType}`);
     } catch (e) {
       console.error("MediaRecorder error:", e);
-      // Fallback to default mime type if codec not supported
-      mediaRecorder = new MediaRecorder(stream, {
-        videoBitsPerSecond: bitrate
-      });
+      // Fallback to default settings
+      mediaRecorder = new MediaRecorder(stream);
+      console.log(`Fallback codec: ${mediaRecorder.mimeType}`);
     }
     
     const chunks: BlobPart[] = [];
@@ -92,16 +130,28 @@ export const exportVideo = async (
           onProgress(95);
           toast.info("Finalizing export...");
           
-          const blob = new Blob(chunks, { 
-            type: format === 'webm' ? 'video/webm' : 'video/mp4' 
-          });
+          // Create appropriate MIME type for the output format
+          const outputMimeType = format === 'webm' ? 'video/webm' : 'video/mp4';
+          
+          // Create blob with the correct type
+          const blob = new Blob(chunks, { type: outputMimeType });
+          
+          if (blob.size === 0) {
+            toast.error("Export failed: No data recorded");
+            if (wasPlaying) videoRef.play();
+            reject(new Error("No data recorded"));
+            return;
+          }
           
           onProgress(100);
           const fileName = `screen-recording-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.${format}`;
           const url = window.URL.createObjectURL(blob);
+          
+          // Create a download link and trigger it
           const a = document.createElement('a');
           a.href = url;
           a.download = fileName;
+          a.style.display = 'none';
           document.body.appendChild(a);
           a.click();
           
@@ -109,12 +159,15 @@ export const exportVideo = async (
           setTimeout(() => {
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
+            if (wasPlaying) videoRef.play();
           }, 100);
           
-          toast.success(`Export completed successfully: ${fileName}`);
+          toast.success(`Export completed: ${fileName}`);
           resolve();
         } catch (error) {
           console.error("Error in mediaRecorder.onstop:", error);
+          toast.error("Export failed: Error processing video");
+          if (wasPlaying) videoRef.play();
           reject(error);
         }
       };
@@ -122,12 +175,13 @@ export const exportVideo = async (
       mediaRecorder.onerror = (event) => {
         console.error("MediaRecorder error:", event);
         toast.error("Error during recording");
+        if (wasPlaying) videoRef.play();
         reject(new Error("MediaRecorder error"));
       };
 
       try {
-        mediaRecorder.start();
-        videoRef.muted = false;
+        // Start recording
+        mediaRecorder.start(1000); // Collect data every second
         videoRef.play();
 
         let lastProgress = 10;
@@ -142,70 +196,52 @@ export const exportVideo = async (
 
         const captureFrame = async () => {
           try {
-            // Enhanced html2canvas options for better quality
-            const snapshot = await html2canvas(videoContainer, {
-              backgroundColor: null,
-              logging: false,
-              useCORS: true,
-              allowTaint: true,
-              scale: scaleFactor,
-              imageTimeout: 0, // No timeout for image rendering
-              onclone: (clonedDoc) => {
-                // Make sure styles are preserved in cloned document
-                const clonedContainer = clonedDoc.getElementById('video-container');
-                if (clonedContainer) {
-                  clonedContainer.style.transform = 'none';
-                  
-                  // Ensure all child elements maintain their quality
-                  const allElements = clonedContainer.querySelectorAll('*');
-                  allElements.forEach(el => {
-                    if (el instanceof HTMLElement) {
-                      el.style.imageRendering = 'high-quality';
-                      // Ensure video is visible
-                      if (el.tagName === 'VIDEO') {
-                        el.style.visibility = 'visible';
-                        el.style.opacity = '1';
-                      }
-                    }
-                  });
-                }
-              }
-            });
-            
-            // Use high-quality image rendering when drawing to canvas
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = 'high';
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(snapshot, 0, 0, canvas.width, canvas.height);
-            
-            if (!videoRef.ended && !videoRef.paused) {
-              requestAnimationFrame(captureFrame);
-            } else {
+            if (videoRef.paused || videoRef.ended) {
               clearInterval(progressInterval);
               setTimeout(() => {
                 try {
                   mediaRecorder.stop();
-                  if (wasPlaying) videoRef.play();
                 } catch (e) {
                   console.error("Error stopping mediaRecorder:", e);
                   reject(e);
                 }
               }, 500);
+              return;
             }
+
+            // Capture the video frame directly
+            ctx.drawImage(videoRef, 0, 0, canvas.width, canvas.height);
+            
+            requestAnimationFrame(captureFrame);
           } catch (err) {
             console.error("Error capturing frame:", err);
             clearInterval(progressInterval);
+            toast.error("Export failed: Error capturing frames");
+            if (wasPlaying) videoRef.play();
             reject(err);
           }
         };
 
+        // Start capturing frames
         captureFrame().catch(err => {
           console.error("Error in captureFrame:", err);
           clearInterval(progressInterval);
+          toast.error("Export failed: Error initiating capture");
+          if (wasPlaying) videoRef.play();
           reject(err);
         });
+        
+        // Set a maximum recording time as a safeguard
+        setTimeout(() => {
+          if (mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+          }
+        }, (totalDuration * 1000) + 5000); // Video duration plus 5 seconds buffer
+        
       } catch (error) {
         console.error("Error starting mediaRecorder:", error);
+        toast.error("Export failed: Could not start recording");
+        if (wasPlaying) videoRef.play();
         reject(error);
       }
     });
