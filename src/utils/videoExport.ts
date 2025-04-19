@@ -31,9 +31,11 @@ export const exportVideo = async (
     
     videoRef.currentTime = 0;
 
+    // Calculate high resolution canvas dimensions based on quality setting
+    const scaleFactor = quality === '2160p' ? 3 : quality === '1080p' ? 2 : 1.5;
     const canvas = document.createElement('canvas');
-    canvas.width = videoContainer.offsetWidth;
-    canvas.height = videoContainer.offsetHeight;
+    canvas.width = videoContainer.offsetWidth * scaleFactor;
+    canvas.height = videoContainer.offsetHeight * scaleFactor;
     const ctx = canvas.getContext('2d');
     
     if (!ctx) {
@@ -41,10 +43,16 @@ export const exportVideo = async (
       return;
     }
 
-    const bitrate = quality === '2160p' ? 8000000 : quality === '1080p' ? 5000000 : 2000000;
-    const stream = canvas.captureStream(30);
+    // Higher bitrates for better quality
+    const bitrate = quality === '2160p' ? 20000000 : quality === '1080p' ? 12000000 : 6000000;
+    
+    // Higher framerate for smoother video
+    const fps = 60;
+    const stream = canvas.captureStream(fps);
+    
+    // Configure MediaRecorder with higher quality settings
     const mediaRecorder = new MediaRecorder(stream, {
-      mimeType: format === 'webm' ? 'video/webm' : 'video/mp4',
+      mimeType: format === 'webm' ? 'video/webm;codecs=vp9' : 'video/mp4;codecs=h264',
       videoBitsPerSecond: bitrate
     });
     
@@ -63,7 +71,7 @@ export const exportVideo = async (
         });
         
         onProgress(100);
-        const fileName = `screen-recording.${format}`;
+        const fileName = `screen-recording-${new Date().toISOString().slice(0, 10)}.${format}`;
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -82,9 +90,9 @@ export const exportVideo = async (
       videoRef.play();
 
       let lastProgress = 10;
-      const totalDuration = videoRef.duration || 0; // Ensure duration is valid
+      const totalDuration = videoRef.duration || 0;
       const progressInterval = setInterval(() => {
-        if (videoRef && totalDuration > 0) { // Make sure duration is valid
+        if (videoRef && totalDuration > 0) {
           const currentProgress = 10 + (videoRef.currentTime / totalDuration) * 85;
           lastProgress = Math.min(95, currentProgress);
           onProgress(Math.floor(lastProgress));
@@ -93,21 +101,34 @@ export const exportVideo = async (
 
       const captureFrame = async () => {
         try {
+          // Enhanced html2canvas options for better quality
           const snapshot = await html2canvas(videoContainer, {
             backgroundColor: null,
             logging: false,
             useCORS: true,
             allowTaint: true,
-            scale: quality === '2160p' ? 2 : 1,
+            scale: scaleFactor,
+            imageTimeout: 0, // No timeout for image rendering
             onclone: (clonedDoc) => {
               // Make sure styles are preserved in cloned document
               const clonedContainer = clonedDoc.getElementById('video-container');
               if (clonedContainer) {
                 clonedContainer.style.transform = 'none';
+                
+                // Ensure all child elements maintain their quality
+                const allElements = clonedContainer.querySelectorAll('*');
+                allElements.forEach(el => {
+                  if (el instanceof HTMLElement) {
+                    el.style.imageRendering = 'high-quality';
+                  }
+                });
               }
             }
           });
           
+          // Use high-quality image rendering when drawing to canvas
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
           ctx.clearRect(0, 0, canvas.width, canvas.height);
           ctx.drawImage(snapshot, 0, 0, canvas.width, canvas.height);
           
