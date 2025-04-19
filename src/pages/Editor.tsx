@@ -10,7 +10,7 @@ import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
 import { BackgroundEffectEditor } from "@/components/background-effects-editor";
 import { VideoPreview } from "@/components/video-preview/VideoPreview";
-import { exportVideo } from "@/utils/videoExport";
+import { exportVideo, formatTimeDisplay } from "@/utils/videoExport";
 
 export default function Editor() {
   const { id } = useParams<{ id: string }>();
@@ -27,6 +27,7 @@ export default function Editor() {
   const [isPlaying, setIsPlaying] = React.useState(false);
   const [splitPoints, setSplitPoints] = React.useState<number[]>([]);
   const videoContainerRef = React.useRef<HTMLDivElement>(null);
+  const [videoDuration, setVideoDuration] = React.useState(0);
   
   const backgrounds = [
     // Soft radial with a bluish glow
@@ -68,35 +69,33 @@ export default function Editor() {
       const url = URL.createObjectURL(recordedBlob);
       setVideoUrl(url);
 
-      if (videoRef.current) {
-        videoRef.current.ontimeupdate = () => {
-          if (videoRef.current) {
-            setCurrentTime(videoRef.current.currentTime);
-          }
-          const relevantPositions = mousePositions.filter(
-            pos => Math.abs(pos.timestamp - (currentTime * 1000)) < 100
-          );
-
-          if (relevantPositions.length > 0) {
-            const lastPosition = relevantPositions[relevantPositions.length - 1];
-            const scale = 1.2; // Zoom scale factor
-            if (videoRef.current) {
-              videoRef.current.style.transform = `scale(${scale})`;
-              videoRef.current.style.transformOrigin = `${lastPosition.x}px ${lastPosition.y}px`;
-            }
-          } else {
-            if (videoRef.current) {
-              videoRef.current.style.transform = 'scale(1)';
-            }
-          }
-        };
-      }
-
       return () => URL.revokeObjectURL(url);
     }
   }, []);
 
-  const videoDuration = videoRef.current?.duration || 45;
+  React.useEffect(() => {
+    const handleLoadedMetadata = () => {
+      if (videoRef.current) {
+        setVideoDuration(videoRef.current.duration);
+      }
+    };
+
+    const videoElement = videoRef.current;
+    if (videoElement) {
+      videoElement.addEventListener('loadedmetadata', handleLoadedMetadata);
+      
+      // If already loaded
+      if (videoElement.readyState >= 1) {
+        setVideoDuration(videoElement.duration);
+      }
+    }
+
+    return () => {
+      if (videoElement) {
+        videoElement.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      }
+    };
+  }, [videoRef.current]);
 
   const handleExport = async (format: string, quality: string, ratio: string) => {
     try {
@@ -128,24 +127,26 @@ export default function Editor() {
   const handleSplitVideo = () => {
     if (videoRef.current && currentTime > 0) {
       setSplitPoints((prev) => {
-        // Check if the split point already exists
-        if (!prev.includes(currentTime)) {
+        // Check if the split point already exists or is very close to existing one
+        const existingPoint = prev.find(point => Math.abs(point - currentTime) < 0.1);
+        if (!existingPoint) {
           return [...prev, currentTime].sort((a, b) => a - b);
         }
         return prev;
       });
-      toast.success(`Split added at ${formatTime(currentTime)}`);
+      toast.success(`Split added at ${formatTimeDisplay(currentTime)}`);
     }
   };
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    const ms = Math.floor((seconds % 1) * 100);
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}.${ms.toString().padStart(2, "0")}`;
+  const handleDeleteSplit = (index: number) => {
+    setSplitPoints(prev => prev.filter((_, i) => i !== index));
+    toast.success("Split point removed");
   };
 
   const handleTimeChange = (time: number) => {
+    if (isNaN(time) || !isFinite(time)) {
+      time = 0;
+    }
     setCurrentTime(time);
     if (videoRef.current) {
       videoRef.current.currentTime = time;
@@ -164,23 +165,33 @@ export default function Editor() {
   };
 
   React.useEffect(() => {
-    const handleVideoEnded = () => {
-      setIsPlaying(false);
-    };
-
-    const videoElement = videoRef.current;
-    if (videoElement) {
-      videoElement.addEventListener('ended', handleVideoEnded);
-    }
-
-    return () => {
-      if (videoElement) {
-        videoElement.removeEventListener('ended', handleVideoEnded);
+    const handleVideoEvents = () => {
+      if (videoRef.current) {
+        // Update current time on timeupdate
+        videoRef.current.ontimeupdate = () => {
+          if (videoRef.current) {
+            setCurrentTime(videoRef.current.currentTime);
+          }
+        };
+        
+        // Handle video ended
+        videoRef.current.onended = () => {
+          setIsPlaying(false);
+        };
       }
     };
-  }, [videoRef]);
 
-  let timeOut;
+    handleVideoEvents();
+    
+    return () => {
+      if (videoRef.current) {
+        videoRef.current.ontimeupdate = null;
+        videoRef.current.onended = null;
+      }
+    };
+  }, [videoRef.current]);
+
+  let timeOut: NodeJS.Timeout;
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -301,15 +312,11 @@ export default function Editor() {
               duration={videoDuration}
               currentTime={currentTime}
               onTimeChange={handleTimeChange}
-              backgrounds={backgrounds}
-              selectedBackground={selectedBackground}
-              setSelectedBackground={setSelectedBackground}
-              padding={padding}
-              setPadding={setPadding}
               onSplitVideo={handleSplitVideo}
               splitPoints={splitPoints}
               isPlaying={isPlaying}
               onPlayPause={togglePlayPause}
+              onDeleteSplit={handleDeleteSplit}
             />
           </div>
         </div>

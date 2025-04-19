@@ -2,6 +2,16 @@
 import html2canvas from "html2canvas";
 import { toast } from "sonner";
 
+export const formatTimeDisplay = (seconds: number): string => {
+  if (isNaN(seconds) || !isFinite(seconds)) {
+    return "00:00.00";
+  }
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  const ms = Math.floor((seconds % 1) * 100);
+  return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}.${ms.toString().padStart(2, "0")}`;
+};
+
 export const exportVideo = async (
   videoRef: HTMLVideoElement,
   videoContainer: HTMLElement,
@@ -72,9 +82,9 @@ export const exportVideo = async (
       videoRef.play();
 
       let lastProgress = 10;
-      const totalDuration = videoRef.duration;
+      const totalDuration = videoRef.duration || 0; // Ensure duration is valid
       const progressInterval = setInterval(() => {
-        if (videoRef) {
+        if (videoRef && totalDuration > 0) { // Make sure duration is valid
           const currentProgress = 10 + (videoRef.currentTime / totalDuration) * 85;
           lastProgress = Math.min(95, currentProgress);
           onProgress(Math.floor(lastProgress));

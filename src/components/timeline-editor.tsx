@@ -1,46 +1,31 @@
 
 import * as React from "react";
-import { ChevronsLeft, ChevronsRight, Scissors, Plus, Minus, MousePointer, ZoomIn, Play, Pause } from "lucide-react";
+import { ChevronsLeft, ChevronsRight, Scissors, Play, Pause, SkipBack, SkipForward, Trash } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { formatTimeDisplay } from "@/utils/videoExport";
 
 interface TimelineEditorProps {
   duration: number;
   currentTime: number;
   onTimeChange: (time: number) => void;
-  backgrounds: string[];
-  setSelectedBackground: (index: number) => void;
-  selectedBackground: number;
-  setPadding: (padding: number) => void;
-  padding: number;
   onSplitVideo: () => void;
   splitPoints: number[];
   isPlaying: boolean;
   onPlayPause: () => void;
+  onDeleteSplit?: (index: number) => void;
 }
 
 export function TimelineEditor({
   duration,
   currentTime,
   onTimeChange,
-  backgrounds,
-  setSelectedBackground,
-  selectedBackground,
-  setPadding,
-  padding,
   onSplitVideo,
   splitPoints,
   isPlaying,
-  onPlayPause
+  onPlayPause,
+  onDeleteSplit
 }: TimelineEditorProps) {
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    const ms = Math.floor((seconds % 1) * 100);
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}.${ms.toString().padStart(2, "0")}`;
-  };
-
   const handleSeekBack = () => {
     const newTime = Math.max(0, currentTime - 5);
     onTimeChange(newTime);
@@ -51,169 +36,143 @@ export function TimelineEditor({
     onTimeChange(newTime);
   };
 
+  // Find the nearest split point to jump to
+  const jumpToPreviousSplit = () => {
+    const previousSplits = splitPoints.filter(point => point < currentTime);
+    if (previousSplits.length > 0) {
+      const nearestSplit = Math.max(...previousSplits);
+      onTimeChange(nearestSplit);
+    } else {
+      onTimeChange(0); // Jump to beginning if no previous splits
+    }
+  };
+
+  const jumpToNextSplit = () => {
+    const nextSplits = splitPoints.filter(point => point > currentTime);
+    if (nextSplits.length > 0) {
+      const nearestSplit = Math.min(...nextSplits);
+      onTimeChange(nearestSplit);
+    } else if (duration) {
+      onTimeChange(duration); // Jump to end if no next splits
+    }
+  };
+
+  const handleDeleteSplit = (index: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onDeleteSplit) {
+      onDeleteSplit(index);
+    }
+  };
+
   return (
     <div className="bg-card rounded-lg border shadow-sm p-4 w-full">
       <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-1">
+        <div className="flex items-center space-x-2">
           <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleSeekBack}>
             <ChevronsLeft className="h-4 w-4" />
           </Button>
-          <span className="font-mono text-sm">{formatTime(currentTime)}</span>
+          <span className="font-mono text-sm">{formatTimeDisplay(currentTime)}</span>
           <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleSeekForward}>
             <ChevronsRight className="h-4 w-4" />
           </Button>
         </div>
-        <div className="flex items-center space-x-1">
-          <Button variant="ghost" size="sm" onClick={onSplitVideo}>
+        <div className="flex items-center space-x-2">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={onSplitVideo}
+            disabled={isPlaying}
+          >
             <Scissors className="h-4 w-4 mr-1" />
             Split
           </Button>
-          <Button variant="ghost" size="sm">
-            <ZoomIn className="h-4 w-4 mr-1" />
-            Add Zoom
-          </Button>
-          <Button variant="outline" size="icon" className="h-8 w-8">
-            <Plus className="h-4 w-4" />
-          </Button>
-          <Button variant="outline" size="icon" className="h-8 w-8">
-            <Minus className="h-4 w-4" />
+          <Button 
+            variant="outline" 
+            size="icon" 
+            className="h-8 w-8"
+            onClick={onPlayPause}
+          >
+            {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
           </Button>
         </div>
       </div>
 
-      <Tabs defaultValue="timeline" className="w-full">
-        <TabsList className="grid grid-cols-3 mb-4 max-w-xs">
-          <TabsTrigger value="timeline">Timeline</TabsTrigger>
-          <TabsTrigger value="background">Background</TabsTrigger>
-          <TabsTrigger value="effects">Effects</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="timeline" className="mt-0">
-          <div className="space-y-4">
-            <div className="flex items-center space-x-2">
-              <span className="text-xs font-medium w-24">Screen</span>
-              <div className="timeline-track flex-1 relative bg-secondary h-10 rounded-md">
-                <div className="timeline-clip absolute top-0 left-0 bottom-0 bg-primary/20 border border-primary rounded">
-                  <div className="px-2 h-full flex items-center text-xs">Main Screen</div>
-                </div>
-                {splitPoints.map((point, index) => (
-                  <div
-                    key={index}
-                    className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-10"
-                    style={{ left: `${(point / duration) * 100}%` }}
-                    title={`Split at ${formatTime(point)}`}
-                  >
-                    <div className="absolute top-[-8px] left-[-8px] bg-red-500 w-4 h-4 rounded-full"></div>
-                  </div>
-                ))}
-                <div 
-                  className="absolute top-0 bottom-0 w-0.5 bg-white z-20"
-                  style={{ left: `${(currentTime / duration) * 100}%` }}
-                >
-                  <div className="absolute top-[-10px] left-[-10px] bg-white w-5 h-5 rounded-full shadow-md"></div>
-                </div>
-              </div>
-              <Button 
-                variant="outline" 
-                size="icon" 
-                className="h-8 w-8"
-                onClick={onPlayPause}
-              >
-                {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-              </Button>
+      <div className="space-y-4">
+        {/* Timeline tracks */}
+        <div className="flex items-center space-x-2">
+          <span className="text-xs font-medium w-24">Screen</span>
+          <div className="timeline-track flex-1 relative bg-secondary h-12 rounded-md">
+            <div className="timeline-clip absolute top-0 left-0 bottom-0 right-0 bg-primary/20 border border-primary rounded">
+              <div className="px-2 h-full flex items-center text-xs">Main Screen</div>
             </div>
-
-            <div className="flex items-center space-x-2">
-              <span className="text-xs font-medium w-24">Camera</span>
-              <div className="timeline-track flex-1 bg-secondary h-10 rounded-md relative">
-                <div className="timeline-clip absolute top-0 left-[10%] bottom-0 w-[80%] bg-primary/20 border border-primary rounded">
-                  <div className="px-2 h-full flex items-center text-xs">Webcam</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <span className="text-xs font-medium w-24">Audio</span>
-              <div className="timeline-track flex-1 bg-secondary h-10 rounded-md relative">
-                <div className="timeline-clip absolute top-0 left-0 bottom-0 right-0 bg-primary/20 border border-primary rounded">
-                  <div className="px-2 h-full flex items-center text-xs">System Audio</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-2">
-              <Slider
-                value={[currentTime]}
-                max={duration}
-                step={0.01}
-                onValueChange={([value]) => onTimeChange(value)}
-              />
-              <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                <span>00:00</span>
-                <span>{formatTime(duration)}</span>
-              </div>
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="background" className="mt-0">
-          <div className="flex flex-row flex-wrap justify-start p-2 gap-2">
-            {backgrounds.map((bg, index) => (
-              <button
+            {splitPoints.map((point, index) => (
+              <div
                 key={index}
-                className={`rounded-lg h-[80px] min-w-[80px] cursor-pointer ${bg} ${selectedBackground === index ? 'ring-2 ring-primary' : ''
-                  }`}
-                onClick={() => setSelectedBackground(index)}
-              />
+                className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-10 cursor-pointer"
+                style={{ left: `${(point / (duration || 1)) * 100}%` }}
+                title={`Split at ${formatTimeDisplay(point)}`}
+                onClick={() => onTimeChange(point)}
+              >
+                <div className="absolute top-[-8px] left-[-8px] bg-red-500 w-4 h-4 rounded-full flex items-center justify-center group">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="absolute h-6 w-6 opacity-0 group-hover:opacity-100 bg-red-600 rounded-full -right-6 -top-1"
+                    onClick={(e) => handleDeleteSplit(index, e)}
+                  >
+                    <Trash className="h-3 w-3 text-white" />
+                  </Button>
+                </div>
+              </div>
             ))}
-          </div>
-
-          <div className="mb-4 space-y-2">
-            <div className="flex justify-between text-sm">
-              <span>Video Padding</span>
-              <span>{padding}px</span>
-            </div>
-            <Slider
-              value={[padding]}
-              min={0}
-              max={64}
-              step={4}
-              onValueChange={([value]) => setPadding(value)}
-            />
-          </div>
-        </TabsContent>
-
-        <TabsContent value="effects" className="mt-0">
-          <div className="space-y-4">
-            <div className="flex flex-col space-y-2">
-              <h3 className="text-sm font-medium">Zoom on Click</h3>
-              <div className="flex items-center space-x-4">
-                <Button variant="outline" size="sm" className="flex-1">Off</Button>
-                <Button variant="outline" size="sm" className="flex-1">Low</Button>
-                <Button variant="outline" size="sm" className="flex-1">Medium</Button>
-                <Button variant="outline" size="sm" className="flex-1">High</Button>
-              </div>
-            </div>
-
-            <div className="flex flex-col space-y-2">
-              <h3 className="text-sm font-medium">Cursor Effects</h3>
-              <div className="flex items-center space-x-4">
-                <Button variant="outline" size="sm" className="flex-1">
-                  <MousePointer className="h-4 w-4 mr-2" />
-                  Normal
-                </Button>
-                <Button variant="outline" size="sm" className="flex-1">
-                  <div className="relative">
-                    <MousePointer className="h-4 w-4 mr-2" />
-                    <div className="absolute inset-0 animate-pulse opacity-70"></div>
-                  </div>
-                  Highlight
-                </Button>
-              </div>
+            <div 
+              className="absolute top-0 bottom-0 w-0.5 bg-white z-20"
+              style={{ left: `${((currentTime || 0) / (duration || 1)) * 100}%` }}
+            >
+              <div className="absolute top-[-10px] left-[-10px] bg-white w-5 h-5 rounded-full shadow-md"></div>
             </div>
           </div>
-        </TabsContent>
-      </Tabs>
+          <div className="flex space-x-1">
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={jumpToPreviousSplit}>
+              <SkipBack className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={jumpToNextSplit}>
+              <SkipForward className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <span className="text-xs font-medium w-24">Camera</span>
+          <div className="timeline-track flex-1 bg-secondary h-10 rounded-md relative">
+            <div className="timeline-clip absolute top-0 left-[10%] bottom-0 w-[80%] bg-primary/20 border border-primary rounded">
+              <div className="px-2 h-full flex items-center text-xs">Webcam</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <span className="text-xs font-medium w-24">Audio</span>
+          <div className="timeline-track flex-1 bg-secondary h-10 rounded-md relative">
+            <div className="timeline-clip absolute top-0 left-0 bottom-0 right-0 bg-primary/20 border border-primary rounded">
+              <div className="px-2 h-full flex items-center text-xs">System Audio</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="pt-2">
+          <Slider
+            value={[currentTime || 0]}
+            max={duration || 100}
+            step={0.01}
+            onValueChange={([value]) => onTimeChange(value)}
+          />
+          <div className="flex justify-between text-xs text-muted-foreground mt-1">
+            <span>00:00.00</span>
+            <span>{formatTimeDisplay(duration)}</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
