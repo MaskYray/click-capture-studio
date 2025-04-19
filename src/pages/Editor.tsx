@@ -9,6 +9,8 @@ import { screenRecordingService } from "@/services/screen-recording";
 import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
 import { BackgroundEffectEditor } from "@/components/background-effects-editor";
+import { VideoPreview } from "@/components/video-preview/VideoPreview";
+import { exportVideo } from "@/utils/videoExport";
 
 export default function Editor() {
   const { id } = useParams<{ id: string }>();
@@ -20,8 +22,12 @@ export default function Editor() {
   const [selectedBackground, setSelectedBackground] = React.useState<number>(0);
   const [padding, setPadding] = React.useState(64);
   const videoRef = React.useRef<HTMLVideoElement>(null);
-  const [showInput, setShowInput] = React.useState(false)
-  const [projectTitle, setProjectTitle] = React.useState(id === "new" ? "Untitled Project" : "Project Demo")
+  const [showInput, setShowInput] = React.useState(false);
+  const [projectTitle, setProjectTitle] = React.useState(id === "new" ? "Untitled Project" : "Project Demo");
+  const [isPlaying, setIsPlaying] = React.useState(false);
+  const [splitPoints, setSplitPoints] = React.useState<number[]>([]);
+  const videoContainerRef = React.useRef<HTMLDivElement>(null);
+  
   const backgrounds = [
     // Soft radial with a bluish glow
     'bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-studio-blue/20 via-white/10 to-studio-purple/30',
@@ -54,7 +60,6 @@ export default function Editor() {
     'bg-gradient-to-b from-studio-blue/30 via-studio-purple to-studio-accent',
   ];
 
-
   React.useEffect(() => {
     const recordedBlob = screenRecordingService.getCurrentRecording();
     const mousePositions = screenRecordingService.getMousePositions();
@@ -65,7 +70,9 @@ export default function Editor() {
 
       if (videoRef.current) {
         videoRef.current.ontimeupdate = () => {
-          const currentTime = videoRef.current?.currentTime || 0;
+          if (videoRef.current) {
+            setCurrentTime(videoRef.current.currentTime);
+          }
           const relevantPositions = mousePositions.filter(
             pos => Math.abs(pos.timestamp - (currentTime * 1000)) < 100
           );
@@ -89,52 +96,90 @@ export default function Editor() {
     }
   }, []);
 
-
-  const videoDuration = 45;
+  const videoDuration = videoRef.current?.duration || 45;
 
   const handleExport = async (format: string, quality: string, ratio: string) => {
     try {
-      const videoContainer = document.getElementById('video-container');
-      if (!videoContainer) {
-        toast.error("Could not find video container");
+      if (!videoRef.current || !videoContainerRef.current) {
+        toast.error("Video not ready for export");
         return;
       }
-
+      
       setIsExporting(true);
       setExportProgress(0);
-
-      const html2canvas = (await import('html2canvas')).default;
-
-      const canvas = await html2canvas(videoContainer, {
-        backgroundColor: null,
-        scale: quality === '2160p' ? 2 : 1,
-        logging: false,
-        allowTaint: true,
-        useCORS: true
-      });
-
-      const blob = await new Promise<Blob>((resolve) => {
-        canvas.toBlob((blob) => {
-          if (blob) resolve(blob);
-        }, `image/${format === 'gif' ? 'gif' : 'png'}`);
-      });
-
-      if (!blob) {
-        throw new Error('Failed to create image blob');
-      }
-
-      setExportProgress(100);
-      await screenRecordingService.saveRecording(blob, `capture.${format === 'gif' ? 'gif' : 'png'}`);
-      toast.success('Export completed successfully');
+      
+      await exportVideo(
+        videoRef.current, 
+        videoContainerRef.current,
+        format, 
+        quality, 
+        (progress) => setExportProgress(progress)
+      );
+      
+      setIsExporting(false);
+      setShowExportPanel(false);
     } catch (error) {
       console.error('Export failed:', error);
       toast.error('Failed to export video');
-    } finally {
       setIsExporting(false);
-      setExportProgress(0);
-      setShowExportPanel(false);
     }
   };
+
+  const handleSplitVideo = () => {
+    if (videoRef.current && currentTime > 0) {
+      setSplitPoints((prev) => {
+        // Check if the split point already exists
+        if (!prev.includes(currentTime)) {
+          return [...prev, currentTime].sort((a, b) => a - b);
+        }
+        return prev;
+      });
+      toast.success(`Split added at ${formatTime(currentTime)}`);
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    const ms = Math.floor((seconds % 1) * 100);
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}.${ms.toString().padStart(2, "0")}`;
+  };
+
+  const handleTimeChange = (time: number) => {
+    setCurrentTime(time);
+    if (videoRef.current) {
+      videoRef.current.currentTime = time;
+    }
+  };
+
+  const togglePlayPause = () => {
+    if (videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.pause();
+      } else {
+        videoRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  React.useEffect(() => {
+    const handleVideoEnded = () => {
+      setIsPlaying(false);
+    };
+
+    const videoElement = videoRef.current;
+    if (videoElement) {
+      videoElement.addEventListener('ended', handleVideoEnded);
+    }
+
+    return () => {
+      if (videoElement) {
+        videoElement.removeEventListener('ended', handleVideoEnded);
+      }
+    };
+  }, [videoRef]);
+
   let timeOut;
 
   return (
@@ -151,17 +196,24 @@ export default function Editor() {
                   Back
                 </a>
               </Button>
-              {!showInput ?
-                <h1 className="text-2xl font-semibold cursor-pointer" onDoubleClick={() => setShowInput(true)}>{projectTitle}</h1>
-                :
-                <input type="text" value={projectTitle} className="border border-blue-500 rounded-sm p-2" onChange={(e) => {
-                  clearTimeout(timeOut)
-                  setProjectTitle(e.target.value)
-                  timeOut = setTimeout(() => {
-                    setShowInput(false)
-                  }, 4000)
-                }} />
-              }
+              {!showInput ? (
+                <h1 className="text-2xl font-semibold cursor-pointer" onDoubleClick={() => setShowInput(true)}>
+                  {projectTitle}
+                </h1>
+              ) : (
+                <input
+                  type="text"
+                  value={projectTitle}
+                  className="border border-blue-500 rounded-sm p-2"
+                  onChange={(e) => {
+                    clearTimeout(timeOut);
+                    setProjectTitle(e.target.value);
+                    timeOut = setTimeout(() => {
+                      setShowInput(false);
+                    }, 4000);
+                  }}
+                />
+              )}
             </div>
 
             <div className="flex items-center space-x-2">
@@ -169,29 +221,34 @@ export default function Editor() {
                 <Save className="h-4 w-4 mr-2" />
                 Save
               </Button>
-              <Button variant="outline" size="sm">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={togglePlayPause}
+              >
                 <Play className="h-4 w-4 mr-2" />
-                Preview
+                {isPlaying ? "Pause" : "Play"}
               </Button>
-
             </div>
           </div>
 
-          <div className="flex flex-row gap-4  ">
-
+          <div className="flex flex-row gap-4">
             <div
               style={{
                 aspectRatio: 3 / 2
               }}
-              className="relative w-full h-full border   flex  justify-center items-center rounded-lg shadow-lg overflow-hidden mb-4">
+              className="relative w-full h-full border flex justify-center items-center rounded-lg shadow-lg overflow-hidden mb-4"
+            >
               <div
+                ref={videoContainerRef}
                 style={{
                   aspectRatio: 3 / 2
                 }}
-                id="video-container" className={`w-full h-fit  flex flex-row justify-center items-center shadow-xl ${backgrounds[selectedBackground]} backdrop-blur-sm`}>
-                {/* Video Item - Centered with proper margin */}
+                id="video-container" 
+                className={`w-full h-fit flex flex-row justify-center items-center shadow-xl ${backgrounds[selectedBackground]} backdrop-blur-sm`}
+              >
                 <div
-                  className={`absolute  h-fit rounded-lg border-gray-600 border-2 overflow-hidden bg-black shadow-lg shadow-black transition-all duration-300`}
+                  className={`absolute h-fit rounded-lg border-gray-600 border-2 overflow-hidden bg-black shadow-lg shadow-black transition-all duration-300`}
                   style={{
                     top: `${padding}px`,
                     bottom: `${padding}px`,
@@ -211,12 +268,11 @@ export default function Editor() {
                       <video
                         ref={videoRef}
                         src={videoUrl}
-                        autoPlay
-                        className=" h-full w-full transition-transform  duration-300"
+                        className="h-full w-full transition-transform duration-300"
                         controls={false}
                       />
                     ) : (
-                      <div className="flex w-full  items-center justify-center">
+                      <div className="flex w-full items-center justify-center">
                         <Play className="h-16 w-16 text-white/50" />
                       </div>
                     )}
@@ -225,12 +281,10 @@ export default function Editor() {
               </div>
             </div>
 
-
-
             <BackgroundEffectEditor
               duration={videoDuration}
               currentTime={currentTime}
-              onTimeChange={setCurrentTime}
+              onTimeChange={handleTimeChange}
               backgrounds={backgrounds}
               selectedBackground={selectedBackground}
               setSelectedBackground={setSelectedBackground}
@@ -239,33 +293,27 @@ export default function Editor() {
               handleExport={handleExport}
               isExporting={isExporting}
               exportProgress={exportProgress}
-
             />
-
-
-
-
           </div>
 
           <div className="py-3">
-
             <TimelineEditor
               duration={videoDuration}
               currentTime={currentTime}
-              onTimeChange={setCurrentTime}
+              onTimeChange={handleTimeChange}
               backgrounds={backgrounds}
               selectedBackground={selectedBackground}
               setSelectedBackground={setSelectedBackground}
               padding={padding}
               setPadding={setPadding}
+              onSplitVideo={handleSplitVideo}
+              splitPoints={splitPoints}
+              isPlaying={isPlaying}
+              onPlayPause={togglePlayPause}
             />
-
           </div>
-
-
-
         </div>
-      </main >
-    </div >
+      </main>
+    </div>
   );
 }

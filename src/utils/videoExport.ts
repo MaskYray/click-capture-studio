@@ -82,25 +82,37 @@ export const exportVideo = async (
       }, 500);
 
       const captureFrame = async () => {
-        const snapshot = await html2canvas(videoContainer, {
-          backgroundColor: null,
-          logging: false,
-          useCORS: true,
-          allowTaint: true,
-          scale: quality === '2160p' ? 2 : 1
-        });
-        
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(snapshot, 0, 0, canvas.width, canvas.height);
-        
-        if (!videoRef.ended && !videoRef.paused) {
-          requestAnimationFrame(captureFrame);
-        } else {
-          clearInterval(progressInterval);
-          setTimeout(() => {
-            mediaRecorder.stop();
-            if (wasPlaying) videoRef.play();
-          }, 500);
+        try {
+          const snapshot = await html2canvas(videoContainer, {
+            backgroundColor: null,
+            logging: false,
+            useCORS: true,
+            allowTaint: true,
+            scale: quality === '2160p' ? 2 : 1,
+            onclone: (clonedDoc) => {
+              // Make sure styles are preserved in cloned document
+              const clonedContainer = clonedDoc.getElementById('video-container');
+              if (clonedContainer) {
+                clonedContainer.style.transform = 'none';
+              }
+            }
+          });
+          
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(snapshot, 0, 0, canvas.width, canvas.height);
+          
+          if (!videoRef.ended && !videoRef.paused) {
+            requestAnimationFrame(captureFrame);
+          } else {
+            clearInterval(progressInterval);
+            setTimeout(() => {
+              mediaRecorder.stop();
+              if (wasPlaying) videoRef.play();
+            }, 500);
+          }
+        } catch (err) {
+          console.error("Error capturing frame:", err);
+          reject(err);
         }
       };
 

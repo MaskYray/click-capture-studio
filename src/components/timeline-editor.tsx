@@ -1,6 +1,6 @@
 
 import * as React from "react";
-import { ChevronsLeft, ChevronsRight, Scissors, Plus, Minus, MousePointer, ZoomIn } from "lucide-react";
+import { ChevronsLeft, ChevronsRight, Scissors, Plus, Minus, MousePointer, ZoomIn, Play, Pause } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,9 +11,13 @@ interface TimelineEditorProps {
   onTimeChange: (time: number) => void;
   backgrounds: string[];
   setSelectedBackground: (index: number) => void;
-  selectedBackground;
+  selectedBackground: number;
   setPadding: (padding: number) => void;
-  padding: number
+  padding: number;
+  onSplitVideo: () => void;
+  splitPoints: number[];
+  isPlaying: boolean;
+  onPlayPause: () => void;
 }
 
 export function TimelineEditor({
@@ -24,15 +28,12 @@ export function TimelineEditor({
   setSelectedBackground,
   selectedBackground,
   setPadding,
-  padding
+  padding,
+  onSplitVideo,
+  splitPoints,
+  isPlaying,
+  onPlayPause
 }: TimelineEditorProps) {
-  // Sample zoom points for demonstration
-  const zoomPoints = [
-    { id: 1, time: 4.5 },
-    { id: 2, time: 12.2 },
-    { id: 3, time: 25.7 },
-  ];
-
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
@@ -40,20 +41,30 @@ export function TimelineEditor({
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}.${ms.toString().padStart(2, "0")}`;
   };
 
+  const handleSeekBack = () => {
+    const newTime = Math.max(0, currentTime - 5);
+    onTimeChange(newTime);
+  };
+
+  const handleSeekForward = () => {
+    const newTime = Math.min(duration, currentTime + 5);
+    onTimeChange(newTime);
+  };
+
   return (
     <div className="bg-card rounded-lg border shadow-sm p-4 w-full">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center space-x-1">
-          <Button variant="outline" size="icon" className="h-8 w-8">
+          <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleSeekBack}>
             <ChevronsLeft className="h-4 w-4" />
           </Button>
           <span className="font-mono text-sm">{formatTime(currentTime)}</span>
-          <Button variant="outline" size="icon" className="h-8 w-8">
+          <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleSeekForward}>
             <ChevronsRight className="h-4 w-4" />
           </Button>
         </div>
         <div className="flex items-center space-x-1">
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" onClick={onSplitVideo}>
             <Scissors className="h-4 w-4 mr-1" />
             Split
           </Button>
@@ -73,32 +84,49 @@ export function TimelineEditor({
       <Tabs defaultValue="timeline" className="w-full">
         <TabsList className="grid grid-cols-3 mb-4 max-w-xs">
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
+          <TabsTrigger value="background">Background</TabsTrigger>
+          <TabsTrigger value="effects">Effects</TabsTrigger>
         </TabsList>
 
         <TabsContent value="timeline" className="mt-0">
           <div className="space-y-4">
             <div className="flex items-center space-x-2">
               <span className="text-xs font-medium w-24">Screen</span>
-              <div className="timeline-track flex-1">
-                <div className="timeline-clip" style={{ left: "0%", width: "100%" }}>
+              <div className="timeline-track flex-1 relative bg-secondary h-10 rounded-md">
+                <div className="timeline-clip absolute top-0 left-0 bottom-0 bg-primary/20 border border-primary rounded">
                   <div className="px-2 h-full flex items-center text-xs">Main Screen</div>
                 </div>
-                {zoomPoints.map((point) => (
+                {splitPoints.map((point, index) => (
                   <div
-                    key={point.id}
-                    className="zoom-marker"
-                    style={{ left: `${(point.time / duration) * 100}%` }}
+                    key={index}
+                    className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-10"
+                    style={{ left: `${(point / duration) * 100}%` }}
+                    title={`Split at ${formatTime(point)}`}
                   >
-                    <span className="sr-only">Zoom point at {formatTime(point.time)}</span>
+                    <div className="absolute top-[-8px] left-[-8px] bg-red-500 w-4 h-4 rounded-full"></div>
                   </div>
                 ))}
+                <div 
+                  className="absolute top-0 bottom-0 w-0.5 bg-white z-20"
+                  style={{ left: `${(currentTime / duration) * 100}%` }}
+                >
+                  <div className="absolute top-[-10px] left-[-10px] bg-white w-5 h-5 rounded-full shadow-md"></div>
+                </div>
               </div>
+              <Button 
+                variant="outline" 
+                size="icon" 
+                className="h-8 w-8"
+                onClick={onPlayPause}
+              >
+                {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+              </Button>
             </div>
 
             <div className="flex items-center space-x-2">
               <span className="text-xs font-medium w-24">Camera</span>
-              <div className="timeline-track flex-1">
-                <div className="timeline-clip" style={{ left: "10%", width: "80%" }}>
+              <div className="timeline-track flex-1 bg-secondary h-10 rounded-md relative">
+                <div className="timeline-clip absolute top-0 left-[10%] bottom-0 w-[80%] bg-primary/20 border border-primary rounded">
                   <div className="px-2 h-full flex items-center text-xs">Webcam</div>
                 </div>
               </div>
@@ -106,8 +134,8 @@ export function TimelineEditor({
 
             <div className="flex items-center space-x-2">
               <span className="text-xs font-medium w-24">Audio</span>
-              <div className="timeline-track flex-1">
-                <div className="timeline-clip" style={{ left: "0%", width: "100%" }}>
+              <div className="timeline-track flex-1 bg-secondary h-10 rounded-md relative">
+                <div className="timeline-clip absolute top-0 left-0 bottom-0 right-0 bg-primary/20 border border-primary rounded">
                   <div className="px-2 h-full flex items-center text-xs">System Audio</div>
                 </div>
               </div>
@@ -129,7 +157,6 @@ export function TimelineEditor({
         </TabsContent>
 
         <TabsContent value="background" className="mt-0">
-
           <div className="flex flex-row flex-wrap justify-start p-2 gap-2">
             {backgrounds.map((bg, index) => (
               <button
@@ -154,7 +181,6 @@ export function TimelineEditor({
               onValueChange={([value]) => setPadding(value)}
             />
           </div>
-
         </TabsContent>
 
         <TabsContent value="effects" className="mt-0">

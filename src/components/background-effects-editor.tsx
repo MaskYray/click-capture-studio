@@ -12,12 +12,12 @@ interface BackgroundEffectProp {
   onTimeChange: (time: number) => void;
   backgrounds: string[];
   setSelectedBackground: (index: number) => void;
-  selectedBackground;
+  selectedBackground: number;
   setPadding: (padding: number) => void;
-  padding: number
-  handleExport,
-  isExporting,
-  exportProgress,
+  padding: number;
+  handleExport: (format: string, quality: string, ratio: string) => void;
+  isExporting: boolean;
+  exportProgress: number;
 }
 
 export function BackgroundEffectEditor({
@@ -30,13 +30,6 @@ export function BackgroundEffectEditor({
   setPadding,
   padding
 }: BackgroundEffectProp) {
-  // Sample zoom points for demonstration
-  const zoomPoints = [
-    { id: 1, time: 4.5 },
-    { id: 2, time: 12.2 },
-    { id: 3, time: 25.7 },
-  ];
-
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
@@ -51,11 +44,9 @@ export function BackgroundEffectEditor({
           <TabsTrigger value="background">Background</TabsTrigger>
           <TabsTrigger value="effects">Effects</TabsTrigger>
           <TabsTrigger value="export">Export</TabsTrigger>
-
         </TabsList>
 
         <TabsContent value="background" className="mt-0">
-
           <div className="flex flex-row flex-wrap justify-start p-2 gap-2">
             {backgrounds.map((bg, index) => (
               <button
@@ -80,10 +71,9 @@ export function BackgroundEffectEditor({
               onValueChange={([value]) => setPadding(value)}
             />
           </div>
-
         </TabsContent>
+        
         <TabsContent value="export" className="mt-0">
-
           <div className="mt-4">
             <ExportPanel
               onExport={handleExport}
@@ -91,8 +81,8 @@ export function BackgroundEffectEditor({
               progress={exportProgress}
             />
           </div>
-
         </TabsContent>
+        
         <TabsContent value="effects" className="mt-0">
           <div className="space-y-4">
             <div className="flex flex-col space-y-2">
