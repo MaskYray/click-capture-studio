@@ -23,7 +23,7 @@ export function RecordingControls({
   };
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-background/80 backdrop-blur-md border border-border rounded-full px-4 py-2 shadow-lg z-50 flex items-center space-x-4">
+    <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-background/80 backdrop-blur-md border border-border rounded-full px-4 py-2 shadow-lg z-50 flex items-center space-x-4">
       <div className="flex items-center">
         <div className={`w-3 h-3 rounded-full mr-2 ${isPaused ? "bg-amber-500" : "bg-red-500 animate-pulse"}`} />
         <span className="text-sm font-medium">{formatTime(duration)}</span>

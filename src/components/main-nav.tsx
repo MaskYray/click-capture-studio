@@ -21,7 +21,7 @@ export function MainNav({
     >
       <a href="/" className="flex items-center gap-2">
         <Video className="h-6 w-6 text-studio-accent" />
-        <span className="font-bold text-xl">ClickCapture Studio</span>
+        <span className="font-bold text-xl">Click Studio</span>
       </a>
       <div className="flex items-center gap-4">
         <Button variant="outline" size="icon" className="h-9 w-9">

@@ -9,12 +9,22 @@ interface TimelineEditorProps {
   duration: number;
   currentTime: number;
   onTimeChange: (time: number) => void;
+  backgrounds: string[];
+  setSelectedBackground: (index: number) => void;
+  selectedBackground;
+  setPadding: (padding: number) => void;
+  padding: number
 }
 
 export function TimelineEditor({
   duration,
   currentTime,
   onTimeChange,
+  backgrounds,
+  setSelectedBackground,
+  selectedBackground,
+  setPadding,
+  padding
 }: TimelineEditorProps) {
   // Sample zoom points for demonstration
   const zoomPoints = [
@@ -59,14 +69,12 @@ export function TimelineEditor({
           </Button>
         </div>
       </div>
-      
+
       <Tabs defaultValue="timeline" className="w-full">
         <TabsList className="grid grid-cols-3 mb-4 max-w-xs">
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
-          <TabsTrigger value="background">Background</TabsTrigger>
-          <TabsTrigger value="effects">Effects</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="timeline" className="mt-0">
           <div className="space-y-4">
             <div className="flex items-center space-x-2">
@@ -76,7 +84,7 @@ export function TimelineEditor({
                   <div className="px-2 h-full flex items-center text-xs">Main Screen</div>
                 </div>
                 {zoomPoints.map((point) => (
-                  <div 
+                  <div
                     key={point.id}
                     className="zoom-marker"
                     style={{ left: `${(point.time / duration) * 100}%` }}
@@ -86,7 +94,7 @@ export function TimelineEditor({
                 ))}
               </div>
             </div>
-            
+
             <div className="flex items-center space-x-2">
               <span className="text-xs font-medium w-24">Camera</span>
               <div className="timeline-track flex-1">
@@ -95,7 +103,7 @@ export function TimelineEditor({
                 </div>
               </div>
             </div>
-            
+
             <div className="flex items-center space-x-2">
               <span className="text-xs font-medium w-24">Audio</span>
               <div className="timeline-track flex-1">
@@ -104,7 +112,7 @@ export function TimelineEditor({
                 </div>
               </div>
             </div>
-            
+
             <div className="pt-2">
               <Slider
                 value={[currentTime]}
@@ -119,21 +127,36 @@ export function TimelineEditor({
             </div>
           </div>
         </TabsContent>
-        
+
         <TabsContent value="background" className="mt-0">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="aspect-video bg-gray-900 rounded-md cursor-pointer hover:ring-2 hover:ring-primary">
-              <div className="h-full w-full flex items-center justify-center text-xs text-white">None</div>
-            </div>
-            <div className="aspect-video bg-gradient-to-br from-studio-blue to-studio-purple rounded-md cursor-pointer hover:ring-2 hover:ring-primary"></div>
-            <div className="aspect-video bg-gradient-to-br from-studio-blue-light to-studio-accent rounded-md cursor-pointer hover:ring-2 hover:ring-primary"></div>
-            <div className="aspect-video bg-gradient-to-br from-studio-purple-light to-studio-purple rounded-md cursor-pointer hover:ring-2 hover:ring-primary"></div>
-            <div className="aspect-video bg-gray-200 dark:bg-gray-800 rounded-md cursor-pointer hover:ring-2 hover:ring-primary flex items-center justify-center">
-              <Plus className="h-5 w-5" />
-            </div>
+
+          <div className="flex flex-row flex-wrap justify-start p-2 gap-2">
+            {backgrounds.map((bg, index) => (
+              <button
+                key={index}
+                className={`rounded-lg h-[80px] min-w-[80px] cursor-pointer ${bg} ${selectedBackground === index ? 'ring-2 ring-primary' : ''
+                  }`}
+                onClick={() => setSelectedBackground(index)}
+              />
+            ))}
           </div>
+
+          <div className="mb-4 space-y-2">
+            <div className="flex justify-between text-sm">
+              <span>Video Padding</span>
+              <span>{padding}px</span>
+            </div>
+            <Slider
+              value={[padding]}
+              min={0}
+              max={64}
+              step={4}
+              onValueChange={([value]) => setPadding(value)}
+            />
+          </div>
+
         </TabsContent>
-        
+
         <TabsContent value="effects" className="mt-0">
           <div className="space-y-4">
             <div className="flex flex-col space-y-2">
@@ -145,7 +168,7 @@ export function TimelineEditor({
                 <Button variant="outline" size="sm" className="flex-1">High</Button>
               </div>
             </div>
-            
+
             <div className="flex flex-col space-y-2">
               <h3 className="text-sm font-medium">Cursor Effects</h3>
               <div className="flex items-center space-x-4">
