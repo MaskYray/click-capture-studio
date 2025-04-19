@@ -1,7 +1,5 @@
 import * as React from "react";
 import { useParams } from "react-router-dom";
-import { ChevronLeft, Download, Play, Save, ZoomIn } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { MainNav } from "@/components/main-nav";
 import { TimelineEditor } from "@/components/timeline-editor";
 import { ExportPanel } from "@/components/export-panel";
@@ -89,11 +87,13 @@ export default function Editor() {
     }
   }, []);
 
+  const projectTitle = id === "new" ? "Untitled Project" : "Project Demo";
 
   const videoDuration = 45;
 
   const handleExport = async (format: string, quality: string, ratio: string) => {
     try {
+      setIsExporting(true);
       const videoContainer = document.getElementById('video-container');
       if (!videoContainer) {
         toast.error("Could not find video container");
@@ -127,9 +127,6 @@ export default function Editor() {
       await screenRecordingService.saveRecording(blob, `capture.${format === 'gif' ? 'gif' : 'png'}`);
       toast.success('Export completed successfully');
     } catch (error) {
-      console.error('Export failed:', error);
-      toast.error('Failed to export video');
-    } finally {
       setIsExporting(false);
       setExportProgress(0);
       setShowExportPanel(false);
@@ -151,17 +148,7 @@ export default function Editor() {
                   Back
                 </a>
               </Button>
-              {!showInput ?
-                <h1 className="text-2xl font-semibold cursor-pointer" onDoubleClick={() => setShowInput(true)}>{projectTitle}</h1>
-                :
-                <input type="text" value={projectTitle} className="border border-blue-500 rounded-sm p-2" onChange={(e) => {
-                  clearTimeout(timeOut)
-                  setProjectTitle(e.target.value)
-                  timeOut = setTimeout(() => {
-                    setShowInput(false)
-                  }, 3000)
-                }} />
-              }
+              <h1 className="text-2xl font-semibold">{projectTitle}</h1>
             </div>
 
             <div className="flex items-center space-x-2">
@@ -173,90 +160,69 @@ export default function Editor() {
                 <Play className="h-4 w-4 mr-2" />
                 Preview
               </Button>
+              <Button
+                className="bg-studio-blue hover:bg-studio-blue/90"
+                size="sm"
+                onClick={() => setShowExportPanel(!showExportPanel)}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export
+              </Button>
             </div>
           </div>
 
-          <div className="flex flex-row gap-4  ">
-
-            <div
-              style={{
-                aspectRatio: 3 / 2
-              }}
-              className="relative w-full h-full   bg-white  flex  justify-center items-center rounded-lg shadow-lg overflow-hidden mb-4">
-              <div id="video-container"
+          <div className="relative aspect-video rounded-lg shadow-lg overflow-hidden mb-4">
+            <div id="video-container" className={`absolute inset-0 ${backgrounds[selectedBackground]} backdrop-blur-sm`}>
+              <div
+                className="absolute rounded-lg overflow-hidden bg-black/5 shadow-xl transition-all duration-300"
                 style={{
-                  aspectRatio: 3 / 2
+                  inset: `${padding}px`,
                 }}
-                className={`w-full flex flex-row justify-center items-center shadow-xl ${backgrounds[selectedBackground]} backdrop-blur-sm`}>
-                {/* Video Item - Centered with proper margin */}
-                <div
-                  className={`absolute h-fit  rounded-lg border-gray-600 border-2 overflow-hidden bg-black shadow-lg shadow-black transition-all duration-300`}
-                  style={{
-                    top: `${padding}px`,
-                    bottom: `${padding}px`,
-                    left: `${padding}px`,
-                    right: `${padding}px`,
-                    margin: 'auto'
-                  }}
-                >
-                  <div>
-                    <div className="bg-blue w-full flex gap-x-1 bg-gray-800 p-2">
-                      <div className="h-2 w-2 bg-red-500 rounded-full shadow"></div>
-                      <div className="h-2 w-2 bg-yellow-200 rounded-full shadow"></div>
-                      <div className="h-2 w-2 bg-green-500 rounded-full shadow"></div>
-                    </div>
-
-                    {videoUrl ? (
-                      <video
-                        ref={videoRef}
-                        src={videoUrl}
-                        autoPlay
-                        className=" h-full w-full transition-transform  duration-300"
-                        controls={false}
-                      />
-                    ) : (
-                      <div className="flex w-full  items-center justify-center">
-                        <Play className="h-16 w-16 text-white/50" />
-                      </div>
-                    )}
+              >
+                {videoUrl ? (
+                  <video
+                    ref={videoRef}
+                    src={videoUrl}
+                    className="w-full h-full object-contain rounded-lg transition-transform duration-300"
+                    controls
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-full">
+                    <Play className="h-16 w-16 text-white/50" />
                   </div>
-                </div>
+                )}
               </div>
             </div>
-
-
-
-            <BackgroundEffectEditor
-              duration={videoDuration}
-              currentTime={currentTime}
-              onTimeChange={setCurrentTime}
-              backgrounds={backgrounds}
-              selectedBackground={selectedBackground}
-              setSelectedBackground={setSelectedBackground}
-              padding={padding}
-              setPadding={setPadding}
-              handleExport={handleExport}
-              isExporting={isExporting}
-              exportProgress={exportProgress}
-
-            />
-
-
-
-
           </div>
 
-          <div className="py-3">
+          <div className="grid grid-cols-4 gap-4 mb-4">
+            {backgrounds.map((bg, index) => (
+              <button
+                key={index}
+                className={`aspect-video rounded-lg cursor-pointer ${bg} ${selectedBackground === index ? 'ring-2 ring-primary' : ''
+                  }`}
+                onClick={() => setSelectedBackground(index)}
+              />
+            ))}
+          </div>
 
-            <TimelineEditor
-              duration={videoDuration}
-              currentTime={currentTime}
-              onTimeChange={setCurrentTime}
-              backgrounds={backgrounds}
-              selectedBackground={selectedBackground}
-              setSelectedBackground={setSelectedBackground}
-              padding={padding}
-              setPadding={setPadding}
+          <TimelineEditor
+            duration={videoDuration}
+            currentTime={currentTime}
+            onTimeChange={setCurrentTime}
+          />
+
+          <div className="mb-4 space-y-2">
+            <div className="flex justify-between text-sm">
+              <span>Video Padding</span>
+              <span>{padding}px</span>
+            </div>
+            <Slider
+              value={[padding]}
+              min={0}
+              max={64}
+              step={4}
+              onValueChange={([value]) => setPadding(value)}
             />
 
           </div>
