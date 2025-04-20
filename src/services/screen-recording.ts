@@ -1,4 +1,3 @@
-
 // Add type definitions for the File System Access API
 interface FileSystemWritableFileStream {
   write(data: BlobPart): Promise<void>;
@@ -31,6 +30,7 @@ declare global {
 export interface RecordingOptions {
   audio: boolean;
   video: boolean;
+  camera: boolean;
 }
 
 export interface MousePosition {
@@ -41,6 +41,7 @@ export interface MousePosition {
 
 export class ScreenRecordingService {
   private mediaRecorder: MediaRecorder | null = null;
+  private cameraStream: MediaStream | null = null;
   private recordedChunks: Blob[] = [];
   private recordedBlob: Blob | null = null;
   private currentRecordingPath: string | null = null;
@@ -75,13 +76,35 @@ export class ScreenRecordingService {
     };
   }
 
-  async startRecording(stream: MediaStream) {
+  async startCameraRecording() {
+    try {
+      this.cameraStream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true
+      });
+      return this.cameraStream;
+    } catch (error) {
+      console.error('Error accessing camera:', error);
+      throw error;
+    }
+  }
+
+  async startRecording(stream: MediaStream, options?: RecordingOptions) {
     try {
       this.recordedChunks = [];
       this.recordedBlob = null;
       this.recordingVideoUrl = null;
       this.mousePositions = [];
-      this.mediaRecorder = new MediaRecorder(stream, {
+
+      let finalStream = stream;
+
+      // If camera is enabled, combine screen and camera streams
+      if (options?.camera && this.cameraStream) {
+        const tracks = [...stream.getTracks(), ...this.cameraStream.getTracks()];
+        finalStream = new MediaStream(tracks);
+      }
+
+      this.mediaRecorder = new MediaRecorder(finalStream, {
         mimeType: 'video/webm;codecs=vp9',
         videoBitsPerSecond: 8000000 // 8 Mbps for high quality
       });
@@ -95,6 +118,11 @@ export class ScreenRecordingService {
       const cleanup = this.trackMousePosition();
       this.mediaRecorder.onstop = () => {
         cleanup();
+        // Stop camera stream if it exists
+        if (this.cameraStream) {
+          this.cameraStream.getTracks().forEach(track => track.stop());
+          this.cameraStream = null;
+        }
       };
 
       this.mediaRecorder.start();
