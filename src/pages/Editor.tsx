@@ -33,10 +33,15 @@ export default function Editor() {
 
   React.useEffect(() => {
     if (id === "new") {
-      const recordingPath = screenRecordingService.getCurrentRecordingPath();
-      if (recordingPath) {
-        setVideoUrl(recordingPath);
+      const recordingVideoUrl = screenRecordingService.getRecordingVideoUrl();
+      console.log("Recording video URL:", recordingVideoUrl);
+      if (recordingVideoUrl) {
+        setVideoUrl(recordingVideoUrl);
+      } else {
+        toast.error("No recording found. Please record a video first.");
       }
+    } else if (id) {
+      setVideoUrl(`/videos/${id}`);
     }
   }, [id]);
 
@@ -53,7 +58,6 @@ export default function Editor() {
 
       videoElement.load();
 
-      // If already loaded
       if (videoElement.readyState >= 1) {
         setVideoDuration(videoElement.duration);
       }
@@ -96,7 +100,6 @@ export default function Editor() {
   const handleSplitVideo = () => {
     if (videoRef.current && currentTime > 0) {
       setSplitPoints((prev) => {
-        // Check if the split point already exists or is very close to existing one
         const existingPoint = prev.find(point => Math.abs(point - currentTime) < 0.1);
         if (!existingPoint) {
           return [...prev, currentTime].sort((a, b) => a - b);
@@ -136,14 +139,12 @@ export default function Editor() {
   React.useEffect(() => {
     const handleVideoEvents = () => {
       if (videoRef.current) {
-        // Update current time on timeupdate
         videoRef.current.ontimeupdate = () => {
           if (videoRef.current) {
             setCurrentTime(videoRef.current.currentTime);
           }
         };
 
-        // Handle video ended
         videoRef.current.onended = () => {
           setIsPlaying(false);
         };
@@ -159,8 +160,6 @@ export default function Editor() {
       }
     };
   }, [videoRef.current]);
-
-  console.log(videoRef.current?.videoWidth * videoRef.current?.videoHeight)
 
   let timeOut: NodeJS.Timeout;
 
@@ -233,13 +232,7 @@ export default function Editor() {
                   className={`absolute aspect-auto ${videoRef.current?.videoWidth > 300 ? "rounded-2xl" : "rounded-xl"} border-gray-600 border-2 overflow-hidden bg-black shadow-lg shadow-black transition-all duration-300`}
                   style={{
                     width: `${videoRef.current?.videoWidth > 500 ? '90%' : '300px'}`,
-                    // height: '500px',
                     scale: `${padding / 100}`,
-                    // top: `${padding}px`,
-                    // bottom: `${padding}px`,
-                    // left: `${padding}px`,
-                    // right: `${padding}px`,
-                    // margin: 'auto'
                   }}
                 >
                   <div className="pb-2  bg-gray-800">

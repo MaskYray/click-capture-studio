@@ -42,8 +42,10 @@ export interface MousePosition {
 export class ScreenRecordingService {
   private mediaRecorder: MediaRecorder | null = null;
   private recordedChunks: Blob[] = [];
+  private recordedBlob: Blob | null = null;
   private currentRecordingPath: string | null = null;
   private mousePositions: MousePosition[] = [];
+  private recordingVideoUrl: string | null = null;
 
   getCurrentRecordingPath() {
     return this.currentRecordingPath;
@@ -51,6 +53,10 @@ export class ScreenRecordingService {
 
   getMousePositions() {
     return this.mousePositions;
+  }
+  
+  getRecordingVideoUrl() {
+    return this.recordingVideoUrl;
   }
 
   private trackMousePosition = () => {
@@ -72,6 +78,8 @@ export class ScreenRecordingService {
   async startRecording(stream: MediaStream) {
     try {
       this.recordedChunks = [];
+      this.recordedBlob = null;
+      this.recordingVideoUrl = null;
       this.mousePositions = [];
       this.mediaRecorder = new MediaRecorder(stream, {
         mimeType: 'video/webm;codecs=vp9',
@@ -110,8 +118,11 @@ export class ScreenRecordingService {
 
       this.mediaRecorder.onstop = async () => {
         try {
-          const recordedBlob = new Blob(this.recordedChunks, { type: 'video/webm' });
+          this.recordedBlob = new Blob(this.recordedChunks, { type: 'video/webm' });
           const fileName = this.generateFileName();
+          
+          // Create a URL for the blob that will be accessible in the editor
+          this.recordingVideoUrl = URL.createObjectURL(this.recordedBlob);
           
           // Use the File System Access API to save the file if available
           if (window.showSaveFilePicker) {
@@ -125,7 +136,7 @@ export class ScreenRecordingService {
               });
               
               const writable = await handle.createWritable();
-              await writable.write(recordedBlob);
+              await writable.write(this.recordedBlob);
               await writable.close();
               
               // Store the file path
@@ -134,13 +145,13 @@ export class ScreenRecordingService {
             } catch (error) {
               console.error('Error using File System Access API:', error);
               // Fall back to downloading if the user cancels or an error occurs
-              this.downloadFile(recordedBlob, fileName);
+              this.downloadFile(this.recordedBlob, fileName);
               this.currentRecordingPath = fileName;
               resolve(fileName);
             }
           } else {
             // Fallback to downloading if File System Access API is not supported
-            this.downloadFile(recordedBlob, fileName);
+            this.downloadFile(this.recordedBlob, fileName);
             this.currentRecordingPath = fileName;
             resolve(fileName);
           }
