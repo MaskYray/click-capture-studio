@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RecordingControls } from "./recording-controls";
 import { CountdownOverlay } from "./countdown-overlay";
 import { screenRecordingService } from "@/services/screen-recording";
+import { LivePreview } from "./live-preview";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 
@@ -177,28 +178,24 @@ export function RecordingModal({
 
           <TabsContent value="screen" className="mt-0">
             <div className="space-y-4">
-              <div className="aspect-video bg-muted rounded-lg flex items-center justify-center">
-                <Monitor className="h-12 w-12 text-muted-foreground/50" />
-              </div>
+              <LivePreview stream={stream} type="screen" />
             </div>
           </TabsContent>
 
           <TabsContent value="camera" className="mt-0">
             <div className="space-y-4">
-              <div className="aspect-video bg-muted rounded-lg flex items-center justify-center">
-                <Camera className="h-12 w-12 text-muted-foreground/50" />
-              </div>
+              <LivePreview stream={cameraStream} type="camera" />
             </div>
           </TabsContent>
 
           <TabsContent value="both" className="mt-0">
             <div className="space-y-4">
               <div className="grid grid-cols-3 gap-4">
-                <div className="col-span-2 aspect-video bg-muted rounded-lg flex items-center justify-center">
-                  <Monitor className="h-10 w-10 text-muted-foreground/50" />
+                <div className="col-span-2">
+                  <LivePreview stream={stream} type="screen" />
                 </div>
-                <div className="aspect-video bg-muted rounded-lg flex items-center justify-center">
-                  <Camera className="h-10 w-10 text-muted-foreground/50" />
+                <div>
+                  <LivePreview stream={cameraStream} type="camera" />
                 </div>
               </div>
             </div>
