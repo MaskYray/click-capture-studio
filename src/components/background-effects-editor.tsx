@@ -18,6 +18,8 @@ interface BackgroundEffectProp {
   handleExport: (format: string, quality: string, ratio: string) => void;
   isExporting: boolean;
   exportProgress: number;
+  showMenu: boolean;
+  setShowMenu: (showMenu: boolean) => void;
 }
 
 export function BackgroundEffectEditor({
@@ -28,7 +30,9 @@ export function BackgroundEffectEditor({
   setSelectedBackground,
   selectedBackground,
   setPadding,
-  padding
+  padding,
+  showMenu,
+  setShowMenu
 }: BackgroundEffectProp) {
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -60,19 +64,19 @@ export function BackgroundEffectEditor({
 
           <div className="mb-4 space-y-2">
             <div className="flex justify-between text-sm">
-              <span>Video Padding</span>
-              <span>{padding}px</span>
+              <span>Scale</span>
+              <span>{padding}%</span>
             </div>
             <Slider
               value={[padding]}
-              min={0}
+              min={10}
               max={100}
               step={4}
               onValueChange={([value]) => setPadding(value)}
             />
           </div>
         </TabsContent>
-        
+
         <TabsContent value="export" className="mt-0">
           <div className="mt-4">
             <ExportPanel
@@ -82,7 +86,7 @@ export function BackgroundEffectEditor({
             />
           </div>
         </TabsContent>
-        
+
         <TabsContent value="effects" className="mt-0">
           <div className="space-y-4">
             <div className="flex flex-col space-y-2">
@@ -92,6 +96,13 @@ export function BackgroundEffectEditor({
                 <Button variant="outline" size="sm" className="flex-1">Low</Button>
                 <Button variant="outline" size="sm" className="flex-1">Medium</Button>
                 <Button variant="outline" size="sm" className="flex-1">High</Button>
+              </div>
+            </div>
+
+            <div className="flex flex-col space-y-2">
+              <h3 className="text-sm font-medium">Menu </h3>
+              <div className="flex items-center space-x-4">
+                <Button onClick={() => setShowMenu(!showMenu)} variant="outline" size="sm" className="flex-1">{showMenu ? 'Off' : 'On'}</Button>
               </div>
             </div>
 

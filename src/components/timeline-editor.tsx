@@ -77,23 +77,36 @@ export function TimelineEditor({
           </Button>
         </div>
         <div className="flex items-center space-x-2">
-          <Button 
-            variant="ghost" 
-            size="sm" 
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={onSplitVideo}
             disabled={isPlaying}
           >
             <Scissors className="h-4 w-4 mr-1" />
             Split
           </Button>
-          <Button 
-            variant="outline" 
-            size="icon" 
+          <Button
+            variant="outline"
+            size="icon"
             className="h-8 w-8"
             onClick={onPlayPause}
           >
             {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
           </Button>
+        </div>
+      </div>
+
+      <div className="py-2">
+        <Slider
+          value={[currentTime || 0]}
+          max={duration || 100}
+          step={0.01}
+          onValueChange={([value]) => onTimeChange(value)}
+        />
+        <div className="flex justify-between text-xs text-muted-foreground mt-2">
+          <span>{formatTimeDisplay(currentTime)}</span>
+          <span>{formatTimeDisplay(10)}</span>
         </div>
       </div>
 
@@ -114,9 +127,9 @@ export function TimelineEditor({
                 onClick={() => onTimeChange(point)}
               >
                 <div className="absolute top-[-8px] left-[-8px] bg-red-500 w-4 h-4 rounded-full flex items-center justify-center group">
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     className="absolute h-6 w-6 opacity-0 group-hover:opacity-100 bg-red-600 rounded-full -right-6 -top-1"
                     onClick={(e) => handleDeleteSplit(index, e)}
                   >
@@ -125,7 +138,7 @@ export function TimelineEditor({
                 </div>
               </div>
             ))}
-            <div 
+            <div
               className="absolute top-0 bottom-0 w-0.5 bg-white z-20"
               style={{ left: `${((currentTime || 0) / (duration || 1)) * 100}%` }}
             >
@@ -142,36 +155,6 @@ export function TimelineEditor({
           </div>
         </div>
 
-        <div className="flex items-center space-x-2">
-          <span className="text-xs font-medium w-24">Camera</span>
-          <div className="timeline-track flex-1 bg-secondary h-10 rounded-md relative">
-            <div className="timeline-clip absolute top-0 left-[10%] bottom-0 w-[80%] bg-primary/20 border border-primary rounded">
-              <div className="px-2 h-full flex items-center text-xs">Webcam</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center space-x-2">
-          <span className="text-xs font-medium w-24">Audio</span>
-          <div className="timeline-track flex-1 bg-secondary h-10 rounded-md relative">
-            <div className="timeline-clip absolute top-0 left-0 bottom-0 right-0 bg-primary/20 border border-primary rounded">
-              <div className="px-2 h-full flex items-center text-xs">System Audio</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="pt-2">
-          <Slider
-            value={[currentTime || 0]}
-            max={duration || 100}
-            step={0.01}
-            onValueChange={([value]) => onTimeChange(value)}
-          />
-          <div className="flex justify-between text-xs text-muted-foreground mt-1">
-            <span>00:00.00</span>
-            <span>{formatTimeDisplay(duration)}</span>
-          </div>
-        </div>
       </div>
     </div>
   );

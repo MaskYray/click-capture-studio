@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { BackgroundEffectEditor } from "@/components/background-effects-editor";
 import { VideoPreview } from "@/components/video-preview/VideoPreview";
 import { exportVideo, formatTimeDisplay } from "@/utils/videoExport";
+import { backgrounds } from "@/services/color";
 
 export default function Editor() {
   const { id } = useParams<{ id: string }>();
@@ -18,9 +19,9 @@ export default function Editor() {
   const [isExporting, setIsExporting] = React.useState(false);
   const [exportProgress, setExportProgress] = React.useState(0);
   const [showExportPanel, setShowExportPanel] = React.useState(false);
-  const [videoUrl, setVideoUrl] = React.useState<string | null>(null);
+  const [videoUrl, setVideoUrl] = React.useState<string | null>('/vid.mp4');
   const [selectedBackground, setSelectedBackground] = React.useState<number>(0);
-  const [padding, setPadding] = React.useState(64);
+  const [padding, setPadding] = React.useState(20);
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const [showInput, setShowInput] = React.useState(false);
   const [projectTitle, setProjectTitle] = React.useState(id === "new" ? "Untitled Project" : "Project Demo");
@@ -28,38 +29,9 @@ export default function Editor() {
   const [splitPoints, setSplitPoints] = React.useState<number[]>([]);
   const videoContainerRef = React.useRef<HTMLDivElement>(null);
   const [videoDuration, setVideoDuration] = React.useState(0);
-  
-  const backgrounds = [
-    // Soft radial with a bluish glow
-    'bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-studio-blue/20 via-white/10 to-studio-purple/30',
+  const [showMenu, setShowMenu] = React.useState(true);
 
-    // Diagonal blend with light tones
-    'bg-gradient-to-br from-studio-purple-light to-studio-accent',
 
-    // Clean linear horizontal blend
-    'bg-gradient-to-r from-studio-blue-light to-studio-purple',
-
-    // Energetic left to right blend
-    'bg-gradient-to-r from-studio-blue to-studio-purple',
-
-    // Center glow effect
-    'bg-[radial-gradient(circle,_var(--tw-gradient-stops))] from-studio-accent/30 via-studio-purple-light to-transparent',
-
-    // Vibrant bottom-right light throw
-    'bg-gradient-to-br from-studio-purple/40 via-studio-accent/30 to-studio-blue/10',
-
-    // Circular gradient with purple core
-    'bg-[radial-gradient(circle_at_top_left,_var(--tw-gradient-stops))] from-studio-purple to-studio-blue/20',
-
-    // Classic diagonal but muted
-    'bg-gradient-to-tr from-studio-purple/10 to-studio-blue/30',
-
-    // Mixed radial shimmer
-    'bg-[radial-gradient(ellipse_at_bottom,_var(--tw-gradient-stops))] from-studio-accent/40 via-studio-purple-light to-studio-blue/10',
-
-    // Top-down bold blend
-    'bg-gradient-to-b from-studio-blue/30 via-studio-purple to-studio-accent',
-  ];
 
   React.useEffect(() => {
     const recordedBlob = screenRecordingService.getCurrentRecording();
@@ -83,7 +55,9 @@ export default function Editor() {
     const videoElement = videoRef.current;
     if (videoElement) {
       videoElement.addEventListener('loadedmetadata', handleLoadedMetadata);
-      
+
+      videoElement.load();
+
       // If already loaded
       if (videoElement.readyState >= 1) {
         setVideoDuration(videoElement.duration);
@@ -95,7 +69,7 @@ export default function Editor() {
         videoElement.removeEventListener('loadedmetadata', handleLoadedMetadata);
       }
     };
-  }, [videoRef.current]);
+  }, [videoRef.current, videoUrl]);
 
   const handleExport = async (format: string, quality: string, ratio: string) => {
     try {
@@ -103,18 +77,18 @@ export default function Editor() {
         toast.error("Video not ready for export");
         return;
       }
-      
+
       setIsExporting(true);
       setExportProgress(0);
-      
+
       await exportVideo(
-        videoRef.current, 
+        videoRef.current,
         videoContainerRef.current,
-        format, 
-        quality, 
+        format,
+        quality,
         (progress) => setExportProgress(progress)
       );
-      
+
       setIsExporting(false);
       setShowExportPanel(false);
     } catch (error) {
@@ -173,7 +147,7 @@ export default function Editor() {
             setCurrentTime(videoRef.current.currentTime);
           }
         };
-        
+
         // Handle video ended
         videoRef.current.onended = () => {
           setIsPlaying(false);
@@ -182,7 +156,7 @@ export default function Editor() {
     };
 
     handleVideoEvents();
-    
+
     return () => {
       if (videoRef.current) {
         videoRef.current.ontimeupdate = null;
@@ -190,6 +164,8 @@ export default function Editor() {
       }
     };
   }, [videoRef.current]);
+
+  console.log(videoRef.current?.videoWidth * videoRef.current?.videoHeight)
 
   let timeOut: NodeJS.Timeout;
 
@@ -232,9 +208,9 @@ export default function Editor() {
                 <Save className="h-4 w-4 mr-2" />
                 Save
               </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={togglePlayPause}
               >
                 <Play className="h-4 w-4 mr-2" />
@@ -253,33 +229,38 @@ export default function Editor() {
               <div
                 ref={videoContainerRef}
                 style={{
-                  aspectRatio: 3 / 2
+                  aspectRatio: 3 / 2,
                 }}
-                id="video-container" 
-                className={`w-full h-fit flex flex-row justify-center items-center shadow-xl ${backgrounds[selectedBackground]} backdrop-blur-sm`}
+                id="video-container"
+                className={`h-full w-full flex flex-row justify-center items-center shadow-xl ${backgrounds[selectedBackground]} backdrop-blur-sm`}
               >
                 <div
-                  className={`absolute h-fit rounded-lg border-gray-600 border-2 overflow-hidden bg-black shadow-lg shadow-black transition-all duration-300`}
+                  className={`absolute aspect-auto ${videoRef.current?.videoWidth > 300 ? "rounded-2xl" : "rounded-xl"} border-gray-600 border-2 overflow-hidden bg-black shadow-lg shadow-black transition-all duration-300`}
                   style={{
-                    top: `${padding}px`,
-                    bottom: `${padding}px`,
-                    left: `${padding}px`,
-                    right: `${padding}px`,
-                    margin: 'auto'
+                    width: `${videoRef.current?.videoWidth > 500 ? '90%' : '300px'}`,
+                    // height: '500px',
+                    scale: `${padding / 100}`,
+                    // top: `${padding}px`,
+                    // bottom: `${padding}px`,
+                    // left: `${padding}px`,
+                    // right: `${padding}px`,
+                    // margin: 'auto'
                   }}
                 >
-                  <div>
-                    <div className="bg-blue w-full flex gap-x-1 bg-gray-800 p-2">
-                      <div className="h-2 w-2 bg-red-500 rounded-full shadow"></div>
-                      <div className="h-2 w-2 bg-yellow-200 rounded-full shadow"></div>
-                      <div className="h-2 w-2 bg-green-500 rounded-full shadow"></div>
-                    </div>
+                  <div className="pb-2  bg-gray-800">
+                    {showMenu &&
+                      <div className="bg-blue w-full flex gap-x-1 bg-gray-800 p-2">
+                        <div className="h-2 w-2 bg-red-500 rounded-full shadow"></div>
+                        <div className="h-2 w-2 bg-yellow-200 rounded-full shadow"></div>
+                        <div className="h-2 w-2 bg-green-500 rounded-full shadow"></div>
+                      </div>
+                    }
 
                     {videoUrl ? (
                       <video
                         ref={videoRef}
                         src={videoUrl}
-                        className="h-full w-full transition-transform duration-300"
+                        className="w-full h-full object-contain transition-transform duration-300"
                         controls={false}
                       />
                     ) : (
@@ -304,6 +285,8 @@ export default function Editor() {
               handleExport={handleExport}
               isExporting={isExporting}
               exportProgress={exportProgress}
+              showMenu={showMenu}
+              setShowMenu={setShowMenu}
             />
           </div>
 
