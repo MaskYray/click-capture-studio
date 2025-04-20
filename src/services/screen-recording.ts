@@ -1,4 +1,33 @@
 
+// Add type definitions for the File System Access API
+interface FileSystemWritableFileStream {
+  write(data: BlobPart): Promise<void>;
+  close(): Promise<void>;
+}
+
+interface FileSystemHandle {
+  kind: 'file' | 'directory';
+  name: string;
+}
+
+interface FileSystemFileHandle extends FileSystemHandle {
+  kind: 'file';
+  createWritable(): Promise<FileSystemWritableFileStream>;
+}
+
+// Extend the Window interface to include File System Access API
+declare global {
+  interface Window {
+    showSaveFilePicker?: (options?: {
+      suggestedName?: string;
+      types?: Array<{
+        description: string;
+        accept: Record<string, string[]>;
+      }>;
+    }) => Promise<FileSystemFileHandle>;
+  }
+}
+
 export interface RecordingOptions {
   audio: boolean;
   video: boolean;
@@ -84,35 +113,34 @@ export class ScreenRecordingService {
           const recordedBlob = new Blob(this.recordedChunks, { type: 'video/webm' });
           const fileName = this.generateFileName();
           
-          // Use the File System Access API to save the file
-          try {
-            const handle = await window.showSaveFilePicker({
-              suggestedName: fileName,
-              types: [{
-                description: 'Video Files',
-                accept: { 'video/webm': ['.webm'] }
-              }]
-            });
-            
-            const writable = await handle.createWritable();
-            await writable.write(recordedBlob);
-            await writable.close();
-            
-            // Store the file path
-            this.currentRecordingPath = fileName;
-            resolve(fileName);
-          } catch (error) {
+          // Use the File System Access API to save the file if available
+          if (window.showSaveFilePicker) {
+            try {
+              const handle = await window.showSaveFilePicker({
+                suggestedName: fileName,
+                types: [{
+                  description: 'Video Files',
+                  accept: { 'video/webm': ['.webm'] }
+                }]
+              });
+              
+              const writable = await handle.createWritable();
+              await writable.write(recordedBlob);
+              await writable.close();
+              
+              // Store the file path
+              this.currentRecordingPath = fileName;
+              resolve(fileName);
+            } catch (error) {
+              console.error('Error using File System Access API:', error);
+              // Fall back to downloading if the user cancels or an error occurs
+              this.downloadFile(recordedBlob, fileName);
+              this.currentRecordingPath = fileName;
+              resolve(fileName);
+            }
+          } else {
             // Fallback to downloading if File System Access API is not supported
-            const url = URL.createObjectURL(recordedBlob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            a.download = fileName;
-            document.body.appendChild(a);
-            a.click();
-            URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-            
+            this.downloadFile(recordedBlob, fileName);
             this.currentRecordingPath = fileName;
             resolve(fileName);
           }
@@ -123,6 +151,18 @@ export class ScreenRecordingService {
 
       this.mediaRecorder.stop();
     });
+  }
+
+  private downloadFile(blob: Blob, fileName: string): void {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
   }
 }
 
