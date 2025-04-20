@@ -19,7 +19,7 @@ export default function Editor() {
   const [isExporting, setIsExporting] = React.useState(false);
   const [exportProgress, setExportProgress] = React.useState(0);
   const [showExportPanel, setShowExportPanel] = React.useState(false);
-  const [videoUrl, setVideoUrl] = React.useState<string | null>('/vid.mp4');
+  const [videoUrl, setVideoUrl] = React.useState<string | null>(null);
   const [selectedBackground, setSelectedBackground] = React.useState<number>(0);
   const [padding, setPadding] = React.useState(20);
   const videoRef = React.useRef<HTMLVideoElement>(null);
@@ -31,19 +31,14 @@ export default function Editor() {
   const [videoDuration, setVideoDuration] = React.useState(0);
   const [showMenu, setShowMenu] = React.useState(true);
 
-
-
   React.useEffect(() => {
-    const recordedBlob = screenRecordingService.getCurrentRecording();
-    const mousePositions = screenRecordingService.getMousePositions();
-
-    if (recordedBlob) {
-      const url = URL.createObjectURL(recordedBlob);
-      setVideoUrl(url);
-
-      return () => URL.revokeObjectURL(url);
+    if (id === "new") {
+      const recordingPath = screenRecordingService.getCurrentRecordingPath();
+      if (recordingPath) {
+        setVideoUrl(recordingPath);
+      }
     }
-  }, []);
+  }, [id]);
 
   React.useEffect(() => {
     const handleLoadedMetadata = () => {

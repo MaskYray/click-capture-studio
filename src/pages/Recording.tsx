@@ -1,4 +1,3 @@
-
 import * as React from "react";
 import { useNavigate } from "react-router-dom";
 import { CountdownOverlay } from "@/components/countdown-overlay";
@@ -83,14 +82,14 @@ export default function Recording() {
     }
 
     try {
-      await screenRecordingService.stopRecording();
-      toast.success('Recording completed');
+      const fileName = await screenRecordingService.stopRecording();
+      toast.success('Recording saved successfully');
+      navigate(`/editor/${encodeURIComponent(fileName)}`);
     } catch (error) {
       console.error('Error saving recording:', error);
       toast.error('Failed to save recording');
+      navigate('/');
     }
-    
-    navigate(`/editor/new`);
   };
 
   return (

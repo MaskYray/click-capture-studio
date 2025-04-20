@@ -13,12 +13,11 @@ export interface MousePosition {
 export class ScreenRecordingService {
   private mediaRecorder: MediaRecorder | null = null;
   private recordedChunks: Blob[] = [];
-  private currentRecording: Blob | null = null;
+  private currentRecordingPath: string | null = null;
   private mousePositions: MousePosition[] = [];
-  private trackingInterval: number | null = null;
 
-  getCurrentRecording() {
-    return this.currentRecording;
+  getCurrentRecordingPath() {
+    return this.currentRecordingPath;
   }
 
   getMousePositions() {
@@ -45,7 +44,10 @@ export class ScreenRecordingService {
     try {
       this.recordedChunks = [];
       this.mousePositions = [];
-      this.mediaRecorder = new MediaRecorder(stream);
+      this.mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'video/webm;codecs=vp9',
+        videoBitsPerSecond: 8000000 // 8 Mbps for high quality
+      });
 
       this.mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -65,34 +67,62 @@ export class ScreenRecordingService {
     }
   }
 
-  stopRecording(): Promise<Blob> {
+  private generateFileName(): string {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    return `recording-${timestamp}.webm`;
+  }
+
+  stopRecording(): Promise<string> {
     return new Promise((resolve, reject) => {
       if (!this.mediaRecorder) {
         reject(new Error('No recording in progress'));
         return;
       }
 
-      this.mediaRecorder.onstop = () => {
-        const recordedBlob = new Blob(this.recordedChunks, { type: 'video/webm' });
-        this.recordedChunks = [];
-        this.currentRecording = recordedBlob;
-        resolve(recordedBlob);
+      this.mediaRecorder.onstop = async () => {
+        try {
+          const recordedBlob = new Blob(this.recordedChunks, { type: 'video/webm' });
+          const fileName = this.generateFileName();
+          
+          // Use the File System Access API to save the file
+          try {
+            const handle = await window.showSaveFilePicker({
+              suggestedName: fileName,
+              types: [{
+                description: 'Video Files',
+                accept: { 'video/webm': ['.webm'] }
+              }]
+            });
+            
+            const writable = await handle.createWritable();
+            await writable.write(recordedBlob);
+            await writable.close();
+            
+            // Store the file path
+            this.currentRecordingPath = fileName;
+            resolve(fileName);
+          } catch (error) {
+            // Fallback to downloading if File System Access API is not supported
+            const url = URL.createObjectURL(recordedBlob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            this.currentRecordingPath = fileName;
+            resolve(fileName);
+          }
+        } catch (error) {
+          reject(error);
+        }
       };
 
       this.mediaRecorder.stop();
     });
-  }
-
-  async saveRecording(blob: Blob, filename: string = 'recording.webm') {
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.style.display = 'none';
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
   }
 }
 
